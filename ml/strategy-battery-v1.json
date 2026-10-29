@@ -1,0 +1,554 @@
+{
+  "version": 1,
+  "hypotheses": [
+    {
+      "id": "xs_reversal_5m",
+      "rule": "xs_reversal",
+      "horizon": 300,
+      "resolution": 300,
+      "holding": 300,
+      "threshold": 0.005
+    },
+    {
+      "id": "xs_momentum_5m",
+      "rule": "xs_momentum",
+      "horizon": 300,
+      "resolution": 300,
+      "holding": 300,
+      "threshold": 0.005
+    },
+    {
+      "id": "abs_reversal_5m",
+      "rule": "abs_reversal",
+      "horizon": 300,
+      "resolution": 300,
+      "holding": 300,
+      "threshold": 0.005
+    },
+    {
+      "id": "abs_momentum_5m",
+      "rule": "abs_momentum",
+      "horizon": 300,
+      "resolution": 300,
+      "holding": 300,
+      "threshold": 0.005
+    },
+    {
+      "id": "xs_reversal_1h",
+      "rule": "xs_reversal",
+      "horizon": 3600,
+      "resolution": 3600,
+      "holding": 3600,
+      "threshold": 0.01
+    },
+    {
+      "id": "xs_momentum_1h",
+      "rule": "xs_momentum",
+      "horizon": 3600,
+      "resolution": 3600,
+      "holding": 3600,
+      "threshold": 0.01
+    },
+    {
+      "id": "abs_reversal_1h",
+      "rule": "abs_reversal",
+      "horizon": 3600,
+      "resolution": 3600,
+      "holding": 3600,
+      "threshold": 0.01
+    },
+    {
+      "id": "abs_momentum_1h",
+      "rule": "abs_momentum",
+      "horizon": 3600,
+      "resolution": 3600,
+      "holding": 3600,
+      "threshold": 0.01
+    },
+    {
+      "id": "xs_reversal_4h",
+      "rule": "xs_reversal",
+      "horizon": 14400,
+      "resolution": 3600,
+      "holding": 14400,
+      "threshold": 0.02
+    },
+    {
+      "id": "xs_momentum_4h",
+      "rule": "xs_momentum",
+      "horizon": 14400,
+      "resolution": 3600,
+      "holding": 14400,
+      "threshold": 0.02
+    },
+    {
+      "id": "abs_reversal_4h",
+      "rule": "abs_reversal",
+      "horizon": 14400,
+      "resolution": 3600,
+      "holding": 14400,
+      "threshold": 0.02
+    },
+    {
+      "id": "abs_momentum_4h",
+      "rule": "abs_momentum",
+      "horizon": 14400,
+      "resolution": 3600,
+      "holding": 14400,
+      "threshold": 0.02
+    },
+    {
+      "id": "xs_reversal_1d",
+      "rule": "xs_reversal",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400,
+      "threshold": 0.05
+    },
+    {
+      "id": "xs_momentum_1d",
+      "rule": "xs_momentum",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400,
+      "threshold": 0.05
+    },
+    {
+      "id": "abs_reversal_1d",
+      "rule": "abs_reversal",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400,
+      "threshold": 0.05
+    },
+    {
+      "id": "abs_momentum_1d",
+      "rule": "abs_momentum",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400,
+      "threshold": 0.05
+    },
+    {
+      "id": "xs_reversal_1w",
+      "rule": "xs_reversal",
+      "horizon": 604800,
+      "resolution": 604800,
+      "holding": 604800,
+      "threshold": 0.1
+    },
+    {
+      "id": "xs_momentum_1w",
+      "rule": "xs_momentum",
+      "horizon": 604800,
+      "resolution": 604800,
+      "holding": 604800,
+      "threshold": 0.1
+    },
+    {
+      "id": "abs_reversal_1w",
+      "rule": "abs_reversal",
+      "horizon": 604800,
+      "resolution": 604800,
+      "holding": 604800,
+      "threshold": 0.1
+    },
+    {
+      "id": "abs_momentum_1w",
+      "rule": "abs_momentum",
+      "horizon": 604800,
+      "resolution": 604800,
+      "holding": 604800,
+      "threshold": 0.1
+    },
+    {
+      "id": "xs_reversal_4w",
+      "rule": "xs_reversal",
+      "horizon": 2419200,
+      "resolution": 604800,
+      "holding": 2419200,
+      "threshold": 0.2
+    },
+    {
+      "id": "xs_momentum_4w",
+      "rule": "xs_momentum",
+      "horizon": 2419200,
+      "resolution": 604800,
+      "holding": 2419200,
+      "threshold": 0.2
+    },
+    {
+      "id": "abs_reversal_4w",
+      "rule": "abs_reversal",
+      "horizon": 2419200,
+      "resolution": 604800,
+      "holding": 2419200,
+      "threshold": 0.2
+    },
+    {
+      "id": "abs_momentum_4w",
+      "rule": "abs_momentum",
+      "horizon": 2419200,
+      "resolution": 604800,
+      "holding": 2419200,
+      "threshold": 0.2
+    },
+    {
+      "id": "patient_3d",
+      "rule": "patient",
+      "horizon": 604800,
+      "resolution": 86400,
+      "holding": 259200,
+      "threshold": 0.1
+    },
+    {
+      "id": "patient_7d",
+      "rule": "patient",
+      "horizon": 604800,
+      "resolution": 86400,
+      "holding": 604800,
+      "threshold": 0.1
+    },
+    {
+      "id": "patient_14d",
+      "rule": "patient",
+      "horizon": 604800,
+      "resolution": 86400,
+      "holding": 1209600,
+      "threshold": 0.1
+    },
+    {
+      "id": "patient_28d",
+      "rule": "patient",
+      "horizon": 604800,
+      "resolution": 86400,
+      "holding": 2419200,
+      "threshold": 0.1
+    },
+    {
+      "id": "patient_1w",
+      "rule": "patient",
+      "horizon": 2419200,
+      "resolution": 604800,
+      "holding": 604800,
+      "threshold": 0.2
+    },
+    {
+      "id": "patient_2w",
+      "rule": "patient",
+      "horizon": 2419200,
+      "resolution": 604800,
+      "holding": 1209600,
+      "threshold": 0.2
+    },
+    {
+      "id": "patient_4w",
+      "rule": "patient",
+      "horizon": 2419200,
+      "resolution": 604800,
+      "holding": 2419200,
+      "threshold": 0.2
+    },
+    {
+      "id": "patient_8w",
+      "rule": "patient",
+      "horizon": 2419200,
+      "resolution": 604800,
+      "holding": 4838400,
+      "threshold": 0.2
+    },
+    {
+      "id": "lead_herbs_1d",
+      "rule": "lead",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400,
+      "family": "herbs"
+    },
+    {
+      "id": "convergence_herbs_1d",
+      "rule": "convergence",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400,
+      "family": "herbs"
+    },
+    {
+      "id": "lead_ores_1d",
+      "rule": "lead",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400,
+      "family": "ores"
+    },
+    {
+      "id": "convergence_ores_1d",
+      "rule": "convergence",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400,
+      "family": "ores"
+    },
+    {
+      "id": "lead_resources_1d",
+      "rule": "lead",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400,
+      "family": "resources"
+    },
+    {
+      "id": "convergence_resources_1d",
+      "rule": "convergence",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400,
+      "family": "resources"
+    },
+    {
+      "id": "lead_herbs_1w",
+      "rule": "lead",
+      "horizon": 604800,
+      "resolution": 604800,
+      "holding": 604800,
+      "family": "herbs"
+    },
+    {
+      "id": "convergence_herbs_1w",
+      "rule": "convergence",
+      "horizon": 604800,
+      "resolution": 604800,
+      "holding": 604800,
+      "family": "herbs"
+    },
+    {
+      "id": "lead_ores_1w",
+      "rule": "lead",
+      "horizon": 604800,
+      "resolution": 604800,
+      "holding": 604800,
+      "family": "ores"
+    },
+    {
+      "id": "convergence_ores_1w",
+      "rule": "convergence",
+      "horizon": 604800,
+      "resolution": 604800,
+      "holding": 604800,
+      "family": "ores"
+    },
+    {
+      "id": "lead_resources_1w",
+      "rule": "lead",
+      "horizon": 604800,
+      "resolution": 604800,
+      "holding": 604800,
+      "family": "resources"
+    },
+    {
+      "id": "convergence_resources_1w",
+      "rule": "convergence",
+      "horizon": 604800,
+      "resolution": 604800,
+      "holding": 604800,
+      "family": "resources"
+    },
+    {
+      "id": "persistent_spread_1d",
+      "rule": "persistent_spread",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400
+    },
+    {
+      "id": "volume_shock_1d",
+      "rule": "volume_shock",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400
+    },
+    {
+      "id": "limit_spread_1d",
+      "rule": "limit_spread",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400
+    },
+    {
+      "id": "low_tax_1d",
+      "rule": "low_tax",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400
+    },
+    {
+      "id": "persistent_spread_1w",
+      "rule": "persistent_spread",
+      "horizon": 604800,
+      "resolution": 604800,
+      "holding": 604800
+    },
+    {
+      "id": "volume_shock_1w",
+      "rule": "volume_shock",
+      "horizon": 604800,
+      "resolution": 604800,
+      "holding": 604800
+    },
+    {
+      "id": "limit_spread_1w",
+      "rule": "limit_spread",
+      "horizon": 604800,
+      "resolution": 604800,
+      "holding": 604800
+    },
+    {
+      "id": "low_tax_1w",
+      "rule": "low_tax",
+      "horizon": 604800,
+      "resolution": 604800,
+      "holding": 604800
+    },
+    {
+      "id": "persistent_spread_4w",
+      "rule": "persistent_spread",
+      "horizon": 2419200,
+      "resolution": 604800,
+      "holding": 2419200
+    },
+    {
+      "id": "volume_shock_4w",
+      "rule": "volume_shock",
+      "horizon": 2419200,
+      "resolution": 604800,
+      "holding": 2419200
+    },
+    {
+      "id": "limit_spread_4w",
+      "rule": "limit_spread",
+      "horizon": 2419200,
+      "resolution": 604800,
+      "holding": 2419200
+    },
+    {
+      "id": "low_tax_4w",
+      "rule": "low_tax",
+      "horizon": 2419200,
+      "resolution": 604800,
+      "holding": 2419200
+    },
+    {
+      "id": "alchemy_1d",
+      "rule": "alchemy",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400
+    },
+    {
+      "id": "processing_1d",
+      "rule": "processing",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400
+    },
+    {
+      "id": "shop_1d",
+      "rule": "shop",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400
+    },
+    {
+      "id": "vol_size_5m",
+      "rule": "vol_size",
+      "horizon": 300,
+      "resolution": 300,
+      "holding": 300
+    },
+    {
+      "id": "range_5m",
+      "rule": "range",
+      "horizon": 300,
+      "resolution": 300,
+      "holding": 300
+    },
+    {
+      "id": "vol_size_1h",
+      "rule": "vol_size",
+      "horizon": 3600,
+      "resolution": 3600,
+      "holding": 3600
+    },
+    {
+      "id": "range_1h",
+      "rule": "range",
+      "horizon": 3600,
+      "resolution": 3600,
+      "holding": 3600
+    },
+    {
+      "id": "vol_size_4h",
+      "rule": "vol_size",
+      "horizon": 14400,
+      "resolution": 3600,
+      "holding": 14400
+    },
+    {
+      "id": "range_4h",
+      "rule": "range",
+      "horizon": 14400,
+      "resolution": 3600,
+      "holding": 14400
+    },
+    {
+      "id": "vol_size_1d",
+      "rule": "vol_size",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400
+    },
+    {
+      "id": "range_1d",
+      "rule": "range",
+      "horizon": 86400,
+      "resolution": 86400,
+      "holding": 86400
+    },
+    {
+      "id": "vol_size_1w",
+      "rule": "vol_size",
+      "horizon": 604800,
+      "resolution": 604800,
+      "holding": 604800
+    },
+    {
+      "id": "range_1w",
+      "rule": "range",
+      "horizon": 604800,
+      "resolution": 604800,
+      "holding": 604800
+    },
+    {
+      "id": "vol_size_4w",
+      "rule": "vol_size",
+      "horizon": 2419200,
+      "resolution": 604800,
+      "holding": 2419200
+    },
+    {
+      "id": "range_4w",
+      "rule": "range",
+      "horizon": 2419200,
+      "resolution": 604800,
+      "holding": 2419200
+    }
+  ],
+  "participation_bps": [
+    10,
+    100,
+    500
+  ],
+  "family_size": 213,
+  "draws": 20000,
+  "seed": 42
+}
