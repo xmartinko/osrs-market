@@ -1,5 +1,12 @@
 # OSRS financial model: implementation and orchestration
 
+**Post-phase-2 status:** the priorities in [next-steps.md](next-steps.md) supersede
+the phase 3–4 ordering below. Execution diagnosis and prospective calibration come
+before foundation adapters or stacking. The phase 2 Python Wiki collector and
+forward ledger now execute on user timers; the older phase 1 scope statements
+below are historical. C++ and database schema changes remain outside this phase.
+The corrected tax boundary is recorded in [phase 2 validation](ml-phase2-validation.md).
+
 ## Scope and data boundary
 
 Branch: `ml/financial-model`, based on `main` at `8e03d49`. The existing C++ collectors, jobs, cache and PostgreSQL tables remain the source of truth. Python never calls the Wiki price or mapping endpoints and never writes to these tables. No frontend/auth changes are required for phase 1.
