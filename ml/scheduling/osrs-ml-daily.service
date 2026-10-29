@@ -1,0 +1,11 @@
+[Unit]
+Description=OSRS Wiki daily archive and frozen daily CatBoost forward ledger
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/src/osrs-market
+Environment=OSRS_DATA_DIR=%h/osrs-data
+Environment="OSRS_WIKI_USER_AGENT=osrs-market private research/0.2 (https://github.com/xmartinko/osrs-market)"
+ExecStart=%h/.local/bin/uv run --project ml --frozen osrs-ml collect --resolution-seconds 86400
+ExecStart=%h/.local/bin/uv run --project ml --frozen osrs-ml forward --resolution-seconds 86400 --horizon-seconds 86400 --model-dir ml/runs/phase2-real-v1/holdout/forecast --history-panel %h/osrs-data/assembled-v3/daily.parquet
+TimeoutStartSec=180

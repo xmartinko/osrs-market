@@ -1,0 +1,11 @@
+[Unit]
+Description=OSRS Wiki immutable 5-minute snapshot and prospective paper ledger
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/src/osrs-market
+Environment=OSRS_DATA_DIR=%h/osrs-data
+Environment="OSRS_WIKI_USER_AGENT=osrs-market private research/0.2 (https://github.com/xmartinko/osrs-market)"
+ExecStart=%h/.local/bin/uv run --project ml --frozen osrs-ml collect
+ExecStart=%h/.local/bin/uv run --project ml --frozen osrs-ml forward
+TimeoutStartSec=120

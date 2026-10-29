@@ -185,6 +185,20 @@ def run(args):
 def parser():
     value = argparse.ArgumentParser(description="OSRS execution-aware model research")
     commands = value.add_subparsers(dest="command", required=True)
+    collector = commands.add_parser("collect", help="Append a sanctioned Wiki bulk snapshot")
+    collector.add_argument("--archive", type=Path)
+    collector.add_argument(
+        "--resolution-seconds", type=int, choices=[300, 3600, 86400], default=300
+    )
+    live = commands.add_parser(
+        "forward", help="Append prospective predictions/outcomes and replay paper trades"
+    )
+    live.add_argument("--archive", type=Path)
+    live.add_argument("--ledger", type=Path)
+    live.add_argument("--horizon-seconds", type=int, default=3600)
+    live.add_argument("--resolution-seconds", type=int, choices=[300, 3600, 86400], default=300)
+    live.add_argument("--model-dir", type=Path)
+    live.add_argument("--history-panel", type=Path)
     research = commands.add_parser("research", help="Frozen real daily walk-forward / holdout")
     research.add_argument("--panel", required=True, type=Path)
     research.add_argument("--output", required=True, type=Path)
@@ -228,7 +242,31 @@ def parser():
 
 def main():
     args = parser().parse_args()
-    if args.command == "research":
+    if args.command == "collect":
+        from .collector import collect
+
+        print(json.dumps(collect(args.archive, resolution=args.resolution_seconds), indent=2))
+    elif args.command == "forward":
+        from .assembly import data_dir
+        from .forward import forward
+
+        archive = args.archive or data_dir() / "forward" / "wiki"
+        ledger = args.ledger or data_dir() / "forward" / f"ledger-{args.resolution_seconds}.sqlite"
+        print(
+            json.dumps(
+                forward(
+                    archive,
+                    ledger,
+                    horizon=args.horizon_seconds,
+                    resolution=args.resolution_seconds,
+                    model_dir=args.model_dir,
+                    history_panel=args.history_panel,
+                ),
+                indent=2,
+                allow_nan=False,
+            )
+        )
+    elif args.command == "research":
         from .research import experiment
 
         experiment(args.panel, args.output, args.config, holdout=args.holdout)

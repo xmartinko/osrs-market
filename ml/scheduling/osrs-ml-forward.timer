@@ -1,0 +1,11 @@
+[Unit]
+Description=Accrue OSRS Wiki snapshots every five minutes
+
+[Timer]
+OnCalendar=*-*-* *:00/5:30
+Persistent=true
+RandomizedDelaySec=5
+Unit=osrs-ml-forward.service
+
+[Install]
+WantedBy=timers.target
