@@ -167,3 +167,41 @@ the holdout cutoff, duplicate decision keys, missing prediction coverage, change
 panel/config hashes and incomplete inputs. It must refuse output overwrites,
 record partial progress durably and label every result `current_limits_sensitivity`.
 Reproduce the three original presets before interpreting the new diagnostics.
+
+## Measured follow-up after implementing priority 1
+
+The [execution validation record](execution-diagnostics-validation.md) contains the
+executed command, complete CatBoost grid and audit output. All 285 development
+replays completed; the original presets reproduced. All figures below remain
+current-limit sensitivities using hypothetical fills, with no new holdout evaluation.
+
+Changing **only price sides** produces CatBoost fold P&L of +15,713 / −288,771 /
++110,353 gp, versus +58,020 / +20,185 / +280,599 optimistic. This breaks the
+all-fold-positive story but does not establish that passive spread capture explains
+every positive result. The complete fixed-fill repricing in fold 2 reduces +280,599
+to +27,198 gp; fold 0 and fold 1 repricings are incomplete because opposite-side
+prices are absent for two and one fill events respectively. Those missing prices
+were not filled in. Participation or queue changes alone also make fold 1 negative.
+Latency and freshness changes alone have no effect in this daily experiment;
+that does not validate their treatment for intraday trading.
+
+The most consequential new finding is **price-tick quantization**. In fold 0,
+optimistic CatBoost buys have median price 3 gp. The nominal passive 5-bps scenario
+keeps all 71 fill events and quantities identical but charges one extra GP per
+purchased unit and removes one GP per sold unit: 48,023 gp total. The effective
+price costs are about 2,251 bps on purchases and 1,445 bps on sales. Its 5/10/30-bps
+results are identical. It also generates 64 units of zero-GP sales; the original
+moderate CatBoost scenario generates three zero-GP sale units across the folds.
+These are not credible executable-price observations. The diagnostic deliberately
+preserved the executor to reproduce phase 2; it has not repaired this behavior.
+
+My verdict remains **no demonstrated executable edge**, with stronger grounds to
+reject the interpretation that moderate/conservative losses prove no real signal.
+Those presets mix uncalibrated fill assumptions with very large effective tick
+costs on cheap items. Before the prospective calibration in priority 2, specify
+valid positive execution prices and distinguish a deterministic one-tick stress
+from an expected slippage estimate. Verify which adverse costs are actually paid,
+including the selection of fills, rather than merely clamping zero prices and
+declaring the model repaired. Preserve these v1 results and version any corrected
+execution policy; then collect own-fill evidence and freeze a new forward trial.
+Foundation-model expansion remains deferred.
