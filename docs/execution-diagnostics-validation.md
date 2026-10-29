@@ -1,5 +1,10 @@
 # Execution diagnosis: executed development sensitivity
 
+**Historical legacy-v1 record.** Nonzero-cost figures and their cost/sign
+interpretations are superseded by the [executed price/tick correction](execution-price-correction-validation.md).
+The original outputs below are preserved for reproduction. Zero-cost contrasts
+and fixed-fill spread accounting remain unchanged; they do not establish actual fills.
+
 Run on `ml/financial-model`, with implementation commit `987cd12`, after the written
 assessment was committed at `0cc55d4`. Documentation commits followed during the run;
 the implementation did not change. C++ and existing research artifacts were unchanged.

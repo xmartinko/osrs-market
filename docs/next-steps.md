@@ -1,5 +1,10 @@
 # Judgment after phase 2
 
+**Current result:** the [executed price correction](execution-price-correction-validation.md)
+supersedes the stressed numbers and negative-sign conclusions retained below as
+historical assessments. Corrected CatBoost moderate is +1,432 / −46,392 / +47,770
+GP and conservative is −97 / −6,046 / +6,238 GP. The holdout remains sealed.
+
 Written before new implementation, against `988efd0` on `ml/financial-model`.
 The supplied tournament figures are development sensitivity evidence, not investment
 returns. The implementation and saved experiment protocol were inspected as well.
@@ -218,3 +223,29 @@ The earlier wording claiming the holdout had been consumed was unsupported: the
 frozen development manifest records `holdout_evaluated=false`. No holdout access
 markers or artifacts were opened to investigate that wording. The restriction
 for this correction is to keep it sealed and use development forecasts only.
+
+## After executing the price correction
+
+All 285 corrected development combinations completed, and all 45 original
+preset/model/fold baselines reproduced under quarantined legacy arithmetic.
+76 tests pass, including all original 54. The independent audit verified 9,880
+positive integer price lots representing 7,332 opportunities, with ten explicitly
+untradeable price opportunities and no nonpositive fills.
+
+The [full validation](execution-price-correction-validation.md) records real output,
+all model results, measured costs and exact supersession deltas. CatBoost moderate
+moves from −113,714 to +2,810 GP summed across separately funded folds; conservative
+moves from −20,890 to +95 GP. Bought/sold and ending inventory units are unchanged
+in all nine CatBoost original-preset comparisons. These small positive sums are
+not a continuous deployment return. The old all-fold-negative argument is withdrawn;
+corrected passive 5/10/30-bps runs remain positive in all three folds.
+
+Priority 1's price/tick arithmetic defect is repaired. The blocking empirical
+question is now whether our orders can obtain the assumed prices and quantities
+without adverse selection. The unchanged complete fixed-fill comparison still
+removes 90.3% of fold-2 profit on crossing the spread. I retain roughly 90%
+subjective confidence in execution conventions/measurement as the explanation
+of the **old reported** sign change, but cannot use the old costs to claim that
+calibrated execution destroys the signal. Executable edge remains undecidable;
+no model was reselected, and no holdout was read or unlocked. Proceed to own-fill
+calibration and prospective data qualification, not a larger model tournament.

@@ -173,6 +173,7 @@ OSRS_DATA_DIR=/home/martin/osrs-data uv run --project ml --frozen \
   > /home/martin/osrs-data/execution-price-correction-v2.log 2>&1
 ```
 
-Completion, market figures and audit output will be recorded in a linked validation
-record after the command and independent audit finish. The implementation was frozen
+The [executed validation record](execution-price-correction-validation.md) contains
+completion output, corrected market figures, exact legacy deltas and the passed
+independent audit. The implementation was frozen
 before this run; subsequent work here adds auditing and documentation only.

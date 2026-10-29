@@ -1,5 +1,10 @@
 # Phase 1 execution record — 2026-10-29
 
+**Legacy price arithmetic:** nonzero slippage/haircut figures below do not measure
+their labelled bps costs. The [price correction](execution-price-correction-validation.md)
+explains the defect and replaces the phase-2 development sensitivities. Phase 1
+has not been rerun in that correction; no replacement phase-1 numbers are claimed.
+
 Implemented code commit: `7a648877be429f529bc35801b88eed4c735f0dfd`, branch
 `ml/financial-model`. The completed run records `dirty: false` at that commit.
 No C++ collector, existing schema, frontend, auth or compose files changed.

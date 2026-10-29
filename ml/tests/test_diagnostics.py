@@ -294,3 +294,33 @@ def test_independent_audit_rejects_corrupt_price_or_residual(frozen_run, column,
     fills.to_parquet(path, index=False)
     with pytest.raises(ValueError, match="Illegal nonpositive|rounding residual"):
         audit(output, panel)
+
+
+@pytest.mark.parametrize("invalid", [0, 1.5])
+def test_fixed_fill_repricing_cannot_invent_an_invalid_opposite_price(invalid):
+    observations, _, _ = example()
+    observations["avg_high_price"] = invalid
+    result = BacktestResult(
+        dict(
+            execution={"passive_prices": True, "slippage_bps": 0},
+            net_gp=0,
+            end_inventory_mark_gp=100,
+        ),
+        [
+            dict(
+                item_id=1,
+                timestamp=DAY + 300,
+                side="buy",
+                quantity=1,
+                price_gp=100,
+                cash_delta_gp=-100,
+                tax_gp=0,
+            )
+        ],
+        [],
+        [],
+    )
+    summary, ledger = fixed_fill_repricing(observations, result)
+    assert summary["missing_crossed_side_fills"] == 1
+    assert summary["crossed_net_gp_same_terminal_mark"] is None
+    assert ledger[0]["crossed_cash_delta_gp"] is None
