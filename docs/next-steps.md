@@ -1,6 +1,13 @@
 # Judgment after phase 2
 
-**Current result:** the [executed price correction](execution-price-correction-validation.md)
+**Current decision:** the [executed participation bounds](participation-bounds-validation.md)
+recommend stopping and reconsidering the current strategy. All 810 frozen
+development combinations completed. With fixed resting offers, CatBoost at 1%
+mean-proxy participation loses in every fold and preset; fold 1 first profits at
+the 50% sample, and fold 2 never profits on the grid through 100%. The broader
+volume ceiling is not achievable execution evidence. The holdout remains sealed.
+
+**Previous phase result:** the [executed price correction](execution-price-correction-validation.md)
 supersedes the stressed numbers and negative-sign conclusions retained below as
 historical assessments. Corrected CatBoost moderate is +1,432 / −46,392 / +47,770
 GP and conservative is −97 / −6,046 / +6,238 GP. The holdout remains sealed.
