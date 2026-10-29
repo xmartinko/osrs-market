@@ -110,6 +110,38 @@ def audit(output, root):
         check(increments.sum() == row["net_gp"], "Increment mismatch")
         mech = spec["rule"] in ("alchemy", "processing")
         tax = TaxPolicy(**m["tax"]) if not mech else TaxPolicy()
+        if not fills.empty:
+            for _, part in fills.groupby("opportunity_id", sort=False):
+                first = part.iloc[0]
+                item, now, submitted = int(first.item_id), int(first.timestamp), int(first.submitted)
+                buy = first.side == "buy"
+                side = ("high" if buy else "low") if mech else ("low" if buy else "high")
+                if mech:
+                    reference = int(lookup.loc[(item, now), f"avg_{side}_price"])
+                else:
+                    history = lookup.loc[item]
+                    prior = history[history.index <= submitted]
+                    check(not prior.empty, "Missing causal submission price")
+                    reference = int(prior.iloc[-1][f"avg_{side}_price"])
+                check((part.reference_price_gp == reference).all(), "Source reference mismatch")
+                target = price_target(reference, 10, buy=buy)
+                lots = integer_lots(target, int(part.quantity.sum()), buy=buy)
+                check(list(zip(part.price_gp, part.quantity, strict=True)) == lots,
+                      "Slippage/lot allocation mismatch")
+                if not mech:
+                    threshold = target // 10000 if buy else (target + 9999) // 10000
+                    check((part.qualification_price_gp == threshold).all(),
+                          "Frozen qualification price mismatch")
+                if buy:
+                    src = lookup.loc[(item, now)]
+                    check(int(src.timestamp) + resolution <= submitted + 3 * resolution + 300,
+                          "Buy bucket exceeds timeout")
+                    if mech:
+                        history = lookup.loc[item]
+                        decision = history[history.index <= submitted].iloc[-1]
+                        ceiling_target = price_target(int(decision.avg_high_price), 10, buy=True)
+                        check(part.price_gp.max() <= (ceiling_target + 9999) // 10000,
+                              "Mechanical frozen ceiling exceeded")
         productions = [] if orders.empty else orders[orders.event == "production"].to_dict("records")
         counts["productions"] += len(productions)
         fixed = m.get("fixed_cost_gp", 0)

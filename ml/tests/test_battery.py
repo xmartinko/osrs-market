@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+
 from osrs_ml.backtest import simulate
 from osrs_ml.battery import (
     DAY,
