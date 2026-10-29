@@ -39,8 +39,43 @@ def audit(root, output):
     source = {(int(r.item_id), int(r.available_at)): r for r in f.itertuples(index=False)}
     panel = pd.read_parquet(output / 'capacity-days.parquet')
     groups = []
+    screen = pd.read_csv(output / 'screens.csv').set_index(['recipe', 'input_side'])
     for (name, scenario), part in panel.groupby(['recipe', 'scenario']):
         r, a = recipes[name], assumptions[scenario]
+        legs = [i for i, _ in r['inputs']] + ([r['output']] if r['output'] else [])
+        assert len(set(legs)) == len(legs) <= 8
+        eligible = []
+        for day in sorted(frame.available_at.unique()):
+            observations = [source.get((i, day)) for i in legs]
+            if all(o is not None and all(pd.notna(getattr(o, field)) for field in
+                       ('avg_high_price', 'avg_low_price', 'high_price_volume', 'low_price_volume'))
+                   and o.avg_high_price >= o.avg_low_price > 0 and
+                   o.high_price_volume > 0 and o.low_price_volume > 0 for o in observations):
+                eligible.append(day)
+        assert set(part.available_at) == set(eligible)
+        if scenario == 'reference':
+            for side in ('low', 'high'):
+                gaps = []
+                for day in eligible:
+                    inputs = r['fee'] + sum(
+                        coefficient * math.ceil(getattr(source[item, day],
+                                                        f'avg_{side}_price') * 1001 / 1000)
+                        for item, coefficient in r['inputs'])
+                    if r['coins']:
+                        proceeds = r['coins']
+                    else:
+                        sale = math.floor(source[r['output'], day].avg_low_price * 999 / 1000)
+                        tax = 0 if sale < 50 or r['output'] == 8794 else sale * 2 // 100
+                        proceeds = sale - min(tax, 5000000)
+                    gaps.append(proceeds - inputs)
+                saved_screen = screen.loc[name, side]
+                positive = [g for g in gaps if g > 0]
+                assert saved_screen.days == len(eligible)
+                assert saved_screen.positive_days == len(positive)
+                assert saved_screen.all_gap_median == np.median(gaps)
+                if positive:
+                    assert saved_screen.positive_gap_median == np.median(positive)
+                    assert np.isclose(saved_screen.positive_gap_p90, np.quantile(positive, .9))
         expected_gp, expected_q, expected_hours, reserved = [], [], [], []
         for row in part.itertuples(index=False):
             unit_cost = r['fee']
