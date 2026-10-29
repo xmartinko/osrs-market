@@ -16,6 +16,8 @@ from .diagnostics import atomic_json
 from .weekly_ingest import external_directory
 
 PROTOCOL = alchemy.REPO / 'docs/mechanical-ceiling-protocol.md'
+AMENDMENT = alchemy.REPO / 'docs/mechanical-ceiling-amendment.md'
+SALE_POLICY = costs.TaxPolicy(exempt_item_ids=(8794,))
 
 
 @dataclass(frozen=True)
@@ -54,7 +56,7 @@ def catalogue():
     for source, output, fee in [(1511, 960, 100), (1521, 8778, 250),
                                 (6333, 8780, 500), (6332, 8782, 1500)]:
         recipes.append(Recipe(f'plank_{output}', 'sawmill', ((source, 1),), output=output,
-                              fee=fee, slow=1000, fast=2000))
+                              fee=fee, slow=500, fast=1000))
     for source, output in [(1973, 1975), (237, 235), (9735, 9736), (5075, 6693)]:
         recipes.append(Recipe(f'grind_{source}', 'grinding', ((source, 1),), output=output,
                               slow=1000, fast=3000))
@@ -65,8 +67,10 @@ def catalogue():
         ('adamant', ((449, 1), (453, 6)), 2361),
         ('runite', ((451, 1), (453, 8)), 2363),
     ]:
+        slow, fast = {'runite': (300, 400), 'adamant': (350, 500),
+                      'mithril': (400, 600)}.get(name, (400, 800))
         recipes.append(Recipe('smelt_' + name, 'furnace', inputs, output=output,
-                              slow=400, fast=800))
+                              slow=slow, fast=fast))
     recipes.append(Recipe('gold_bracelet_alch', 'fixed_chain', ((2357, 1), (561, 1)),
                           coins=330, casts=True, slow=600, fast=1000))
     for item, fee in [(8794, 13), (8790, 650), (4819, 2), (4820, 5), (1539, 3)]:
@@ -133,7 +137,8 @@ def economics(rows, recipe, side='high'):
         proceeds = pd.Series(recipe.coins, index=rows.index, dtype=float)
     else:
         output = np.floor(rows[f'{recipe.output}_avg_low_price'] * .999).astype('int64')
-        proceeds = output.map(lambda p: costs.sale_proceeds(int(p), 1, item_id=recipe.output))
+        proceeds = output.map(lambda p: costs.sale_proceeds(
+            int(p), 1, policy=SALE_POLICY, item_id=recipe.output))
     return total, proceeds - total
 
 
@@ -214,6 +219,7 @@ def run(root, output):
         json.dump(dict(status='reserved', holdout_read=False), stream)
     manifest = dict(status='running', holdout_read=False, profit_tests_run=0,
                     observed_profit_gp=None, protocol_sha256=sha256(PROTOCOL),
+                    amendment_sha256=sha256(AMENDMENT),
                     code_sha256={p.name: sha256(p) for p in
                                  [Path(__file__), Path(alchemy.__file__), Path(costs.__file__)]},
                     assumptions=[a.__dict__ for a in scenarios()],
