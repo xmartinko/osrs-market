@@ -363,3 +363,134 @@ This is a source measurement diagnostic, not a retuned patient strategy, account
 profit test or independent confirmation. No holdout access, synthetic market data,
 Gaussian inference or C++ change. Register and commit before outcomes; completion,
 all corrected failures and executed verification will be appended below.
+
+## 2026-10-30 — mechanical account ceilings and fixed-recipe catalogue
+
+Starting revision `0a3fb26`. Forecast sweeps stay closed. Registered the
+[capacity sensitivity](mechanical-ceiling-protocol.md) in `3c5c1a5`, committed
+implementation in `c97a250`, then ran development daily means only. The four
+prospective hypotheses remain frozen and **were not run as accounts on averages**.
+The [full report](mechanical-ceiling.md) gives every frozen candidate, every new
+catalogue member, visible arithmetic, capital/limits/slots and assumptions.
+Generated data/logs remain under `/home/martin/osrs-data/mechanical-ceiling-v2`.
+The earlier v 1 is retained, with [source corrections](mechanical-ceiling-amendment.md):
+saw seller-tax exemption, lower walking sawmill rates and inventory-aware
+ordinary-furnace rates. No favourable recipe or era was selected out of the scan.
+
+**Measured facts:** provenance-checked 341,047 rows, 84 development timestamps,
+maximum availability 1784937900 < sealed 1785024300. The original alchemy sums
+reproduce exactly: low-side 24,622 positive rows / 11,398,956 one-unit GP;
+high-side 13,915 / 3,422,903. The latter is the 179-GP-median **alchemy** screen,
+not bow recipes. Strict all-leg noninversion leaves 75 valid magic/76 yew bow
+days (all positive); excluded days remain zero-production in 84-day income
+calculations. No market observations, quotes or fills were synthesized.
+
+**Assumptions, not findings:** 10 M account; <=1 M paid input/fee reservation;
+one unfinished batch; eight member slots; one daily active hour including
+5–15 minutes of daily checks/setup. Two-click alching at 600–1,200 casts/hour
+requires 1,200–2,400 clicks/hour, against the documented 1,200-cast maximum.
+Nature costs use observed high means plus the same adverse ceiling as before;
+fire staff costs 1,500 once. A 4 h buy limit starts at first purchase; six full
+allowances/day is only a theoretical bound, never six observed fills. Fixed
+candidate limits 10 k/18 k and nature 18 k exceed the modeled quantities. Sale legs
+pay actual-rule integer 2% seller tax (saw exempt); alchemy/purchases pay none.
+H4 adds casting and stringing times. The report labels retention 25–100%,
+participation 0–1%, matched completion 0–100% and cycle delays as assumptions.
+
+Conditional stand-alone daily endpoints below combine the registered cautious
+and optimistic assumptions. Every numeric column after the candidate name is
+**assumption-driven arithmetic on measured daily averages**, not account profit,
+a confidence interval, a queue model, or a prospective hypothesis result.
+
+| Candidate | Assumed completed units/real day | Conditional GP/active hour | Conditional GP/real day |
+| --- | ---: | ---: | ---: |
+| Direct yew | 106.7–1,100.0 | 6,614–117,687 | 2,830–117,687 |
+| Direct magic | 110.7–754.0 | 14,327–242,082 | 6,224–172,289 |
+| Direct rune tips | 111.9–1,100.0 | 13,866–237,914 | 6,053–237,914 |
+| Direct dragon tips | 87.2–1,041.5 | 13,626–261,911 | 5,387–249,151 |
+| String magic/sell | 117.7–868.5 | 9,243–173,049 | 3,217–97,916 |
+| String yew/sell | 104.9–1,492.9 | 12,214–261,446 | 4,122–238,621 |
+| String magic/alch | 67.0–589.3 | 15,182–247,358 | 6,337–223,064 |
+
+Staff is expensed once separately, not every day: direct dragon endpoints become
+13,581–261,893 GP/active hour and 5,369–249,133 GP/day across these 84 days.
+Rows cannot be added: they reuse one account, time, cash, slots and nature supply.
+The frozen four-arm rotation further limits each arm's assigned opportunities.
+No actual positive executable lower bound is established; zero fills means zero
+conversion profit, and partial-leg inventory can lose money.
+
+**Visible small-ceiling stress:** combine cautious dragon matching with a .25/day
+cycle rate (72 h offers plus daily-check delay): 21.80 items/day;
+GP/day=.25×5,386.66964=1,346.66741; hours/day=.25+.25×(.39531746−.25)=.28632937;
+GP/active hour=**4,703.21** (about 4,641 after first staff). At the frozen 100 k/hour
+time hurdle this is **−27,286 GP/day** before staff. This is a labelled joint
+sensitivity, not a newly measured slow-fill result. The daily-batch reference
+falls from 215,229 to 54,042 GP/hour when retaining only 25% of the gap, versus
+129,145 when slowing 1,000->600 casts/hour. Zero competition allocation or
+completion gives zero GP while daily checks still take time. **Matching fills
+at retained margins, plus capital-release delay, dominate uncertainty.**
+
+**135,700 is not a portfolio or a ceiling.** Its exact 135,701.86 GP/day is a sum
+of one unit of each positive low-side item-day, without volume weights. Direct
+dragon's one-unit contribution is 251.61 GP/day, 0.1854% of that sum; all four
+fixed direct items contribute 0.6146%. Repeated dragon units give a conditional
+3.97%–183.60% ratio to that one-unit denominator (0.99% under slow-cycle stress),
+which is **not an attainable share of a market profit pool**. An account can
+repeat liquid units, so that denominator is not even a valid market upper bound.
+The honest executable pool/share remains unidentified. Do not multiply the
+327-GP marginal median by the 26-unit marginal median and call it an account.
+
+**Other mechanics, bounded catalogue:** measured all eight standard tanning
+recipes, four basic planks, four grinding conversions, seven deterministic bars,
+a gold-bar/bracelet/alch chain, all five fixed-price sawmill shop goods, and four
+mutually exclusive Zaff diary quotas. The report retains every member's positive
+frequency, negative/zero gaps, size and conditional capacity. Examples across
+families: snake tanning 0/58 and 0/9 positive; gold ore smelting 0/84; cloth 0/84;
+bronze nails 0/74; teak planks 84/84 with 205.5-GP median and assumed 81.7–916.0
+units/day; blue tanning 68/68 with 242-GP median and assumed 13.9–408.0 units/day.
+Their optimistic ceilings require output sales, which remain unmeasured.
+Gold bracelet/alch is 84/84 positive but caps near 47.6 k GP/hour optimistic.
+All four grinding methods have optimistic daily GP below 6.6 k after capacity.
+
+Shop saws illustrate the capacity trap: measured 210.5-GP median gap, but assumed
+1% output participation allows only 2.14 units/day, 434.68 GP/day and
+**5,053.70 GP/active hour** even optimistic. Steel nails reach only 17.4 k/hour
+optimistic; iron nails 989/hour. Zaff's fixed 7,000 GP barrel has a real 15/30/60/120
+daily quota, not unlimited supply: conditional optimistic daily profits are
+4,401/8,802/17,604/35,209 GP, respectively. Current diary access is assumed;
+its acquisition has not been charged as free. No normal-shop first-unit price,
+world hopping, replenishment, recipe bonus, uncosted teleport or spell discount
+was extrapolated. These shop/small-processing cases do not merit a dedicated
+account's time under the frozen 100 k/hour hurdle.
+
+**Verification:** independent scalar reconstruction checks all source-valid
+calendars, all 80 side/recipe gap screens, 56,639 daily capacity rows and 760
+summaries; protocol/amendment/code/source/output hashes reconcile. Real output:
+
+```text
+ORIGINAL SCREEN RECONCILED
+      positive  unit_gap_sum
+side
+high     13915       3422903
+low      24622      11398956
+PASS: 341047 development rows; 84 calendar days; 40 recipes; 760 sensitivity rows; capacity/cash/time/limit assertions passed; profit_tests=0; holdout_read=False
+PASS: 56639 scalar source reconciliations; 760 sensitivity summaries; all output/code/protocol hashes; capital, slots, tax, limits and time; holdout_read=False
+245 passed in 38.19s
+All checks passed!
+```
+
+Run manifest SHA-256:
+`bacc58ed9eead4adb50d94831d66adfa03cc24653d44f509476c7c8a40ed0667`.
+No statistical inference was performed, so no Gaussian assumption, bootstrap
+confidence interval or new significance claim is made. These sensitivity
+endpoints do not change the failed original 213 tests or prospective 217 family.
+Holdout stayed sealed; no C++ change, forecast sweep or actual-order submission.
+
+**Decision:** direct alchemy still deserves at most a small actual-fill/time
+calibration because fixed output removes sale risk. The strongest liquid direct
+ceiling example spans roughly**5 k–262 k GP/active hour**, including plausible
+slow-cycle stress, and roughly**1.3 k–249 k GP/real day** before one-time staff.
+That broad range is dominated by unmeasured fills at retained margins. It is
+**not worth dedicating an account to yet**; the cautious case is too small for
+the account's active time. Further work should obtain actual records, not tune
+this range or reopen forecast sweeps.
