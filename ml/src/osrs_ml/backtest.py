@@ -12,7 +12,15 @@ from itertools import pairwise
 
 import pandas as pd
 
-from .costs import DEFAULT_TAX, TaxPolicy, execution_price, sale_proceeds
+from .costs import (
+    DEFAULT_TAX,
+    TaxPolicy,
+    UntradeablePrice,
+    execution_price,
+    integer_lots,
+    price_target,
+    sale_proceeds,
+)
 from .execution import DEFAULT_PORTFOLIO, ExecutionAssumptions, PortfolioPolicy
 
 
@@ -65,6 +73,28 @@ def simulate(
     wait_seconds_units = 0
     peak = portfolio.initial_cash_gp
     drawdown = 0.0
+    legacy = assumptions.price_model == "legacy_v1"
+    opportunity_id = 0
+
+    def target_price(reference, *, buy, now, item, phase):
+        if legacy:
+            return execution_price(int(reference), assumptions.slippage_bps, buy=buy) * 10_000
+        try:
+            return price_target(
+                reference, assumptions.slippage_bps, buy=buy, ticks=assumptions.adverse_ticks
+            )
+        except UntradeablePrice as error:
+            order_log.append(
+                dict(
+                    timestamp=now,
+                    item_id=item,
+                    event="price_rejected",
+                    phase=phase,
+                    reason=str(error),
+                    side="buy" if buy else "sell",
+                )
+            )
+            return None
 
     def reserved() -> int:
         return sum(o.remaining_buy * o.buy_ceiling for o in active.values())
@@ -148,21 +178,41 @@ def simulate(
                 * assumptions.queue_fill_bps
                 // 100_000_000
             )
-            price = execution_price(
-                int(row[f"avg_{side}_price"]), assumptions.slippage_bps, buy=order.stage == "buy"
+            buying = order.stage == "buy"
+            reference = row[f"avg_{side}_price"]
+            target = target_price(reference, buy=buying, now=now, item=item, phase="fill")
+            if target is None:
+                continue
+            if buying and (target + 9999) // 10_000 > order.buy_ceiling:
+                continue
+            quantity = (
+                min(order.remaining_buy, capacity, available_limit(item, now, row))
+                if buying
+                else min(order.quantity, capacity)
             )
-            if order.stage == "buy":
-                if price > order.buy_ceiling:
-                    continue
-                quantity = min(order.remaining_buy, capacity, available_limit(item, now, row))
-                if quantity <= 0:
-                    continue
+            if quantity <= 0:
+                continue
+            lots = (
+                [(target // 10_000, quantity)]
+                if legacy
+                else integer_lots(target, quantity, buy=buying)
+            )
+            opportunity_id += 1
+            gross = sum(price * units for price, units in lots)
+            price_cost = (gross - int(reference) * quantity) * (1 if buying else -1)
+            tick_cost = assumptions.adverse_ticks * quantity
+            residual = (
+                int(reference) * quantity * assumptions.slippage_bps
+                - (price_cost - tick_cost) * 10_000
+            )
+            submitted = order.submitted if buying else order.sell_submitted
+            if buying:
                 window = windows.get(item)
                 if window is None or now >= window[0] + 14_400:
                     window = (now, 0)
                 windows[item] = (window[0], window[1] + quantity)
-                cash -= quantity * price
-                order.cost_gp += quantity * price
+                cash -= gross
+                order.cost_gp += gross
                 order.quantity += quantity
                 order.remaining_buy -= quantity
                 order.first_fill = order.first_fill if order.first_fill is not None else now
@@ -170,44 +220,40 @@ def simulate(
                 wait_seconds_units += (now - order.submitted) * quantity
                 if order.remaining_buy == 0:
                     order.stage = "hold"
-                fills.append(
-                    {
-                        "timestamp": now,
-                        "submitted": order.submitted,
-                        "item_id": item,
-                        "side": "buy",
-                        "quantity": quantity,
-                        "price_gp": price,
-                        "cash_delta_gp": -quantity * price,
-                        "tax_gp": 0,
-                    }
-                )
             else:
-                quantity = min(order.quantity, capacity)
-                if quantity <= 0:
-                    continue
-                proceeds = sale_proceeds(price, quantity, tax, item)
-                # Allocate integer book cost; final sale consumes any rounding remainder.
+                proceeds = sum(sale_proceeds(p, q, tax, item) for p, q in lots)
+                # Allocate integer book cost; final sale consumes any remainder.
                 cost = order.cost_gp * quantity // order.quantity
                 realized += proceeds - cost
                 cash += proceeds
                 sold += quantity
                 order.quantity -= quantity
                 order.cost_gp -= cost
+                if order.quantity == 0:
+                    del active[item]
+            for lot_index, (price, units) in enumerate(lots):
+                proceeds = sale_proceeds(price, units, tax, item) if not buying else 0
                 fills.append(
                     {
                         "timestamp": now,
-                        "submitted": order.sell_submitted,
+                        "submitted": submitted,
                         "item_id": item,
-                        "side": "sell",
-                        "quantity": quantity,
+                        "side": "buy" if buying else "sell",
+                        "quantity": units,
                         "price_gp": price,
-                        "cash_delta_gp": proceeds,
-                        "tax_gp": price * quantity - proceeds,
+                        "cash_delta_gp": -price * units if buying else proceeds,
+                        "tax_gp": 0 if buying else price * units - proceeds,
+                        "opportunity_id": opportunity_id,
+                        "reference_price_gp": int(reference),
+                        "reference_notional_gp": int(reference) * units,
+                        "slippage_bps": assumptions.slippage_bps,
+                        "slippage_cost_gp": (price - int(reference)) * units * (1 if buying else -1)
+                        - assumptions.adverse_ticks * units,
+                        "tick_cost_gp": assumptions.adverse_ticks * units,
+                        # One residual per opportunity, not once per price lot.
+                        "cost_rounding_numerator": residual if lot_index == 0 else 0,
                     }
                 )
-                if order.quantity == 0:
-                    del active[item]
 
         candidates = []
         for item, row in rows.items():
@@ -221,11 +267,16 @@ def simulate(
                 or not fresh(row, "low" if assumptions.passive_prices else "high", now)
             ):
                 continue
-            ceiling = execution_price(
-                int(row["avg_low_price"] if assumptions.passive_prices else row["avg_high_price"]),
-                assumptions.slippage_bps,
+            target = target_price(
+                row["avg_low_price"] if assumptions.passive_prices else row["avg_high_price"],
                 buy=True,
+                now=now,
+                item=item,
+                phase="submission",
             )
+            if target is None:
+                continue
+            ceiling = (target + 9999) // 10_000
             budget = min(
                 cash - reserved(), portfolio.initial_cash_gp * portfolio.allocation_bps // 10_000
             )
@@ -246,14 +297,35 @@ def simulate(
             )
 
         inventory_value = 0
+        unpriceable_units = 0
+        mark_gross = mark_tax = mark_rounding_numerator = 0
         for item, order in active.items():
+            if not order.quantity:
+                continue
             row = latest[item]
-            low = int(row["avg_low_price"]) if present(row, "avg_low_price") else 0
-            # Terminal marks include adverse slippage + a fixed illiquidity haircut,
-            # regardless of whether there is enough volume to sell the position.
-            mark = execution_price(low, assumptions.slippage_bps, buy=False)
-            mark = execution_price(mark, assumptions.terminal_haircut_bps, buy=False)
-            inventory_value += sale_proceeds(mark, order.quantity, tax, item)
+            low = row["avg_low_price"] if present(row, "avg_low_price") else 0
+            if legacy:
+                mark = execution_price(int(low), assumptions.slippage_bps, buy=False)
+                mark = execution_price(mark, assumptions.terminal_haircut_bps, buy=False)
+                proceeds = sale_proceeds(mark, order.quantity, tax, item)
+                inventory_value += proceeds
+                mark_gross += mark * order.quantity
+                mark_tax += mark * order.quantity - proceeds
+            else:
+                try:
+                    target = price_target(
+                        low, assumptions.slippage_bps, buy=False, ticks=assumptions.adverse_ticks
+                    ) * (10_000 - assumptions.terminal_haircut_bps)
+                    lots = integer_lots(target, order.quantity, buy=False, denominator=100_000_000)
+                    gross = sum(p * q for p, q in lots)
+                    proceeds = sum(sale_proceeds(p, q, tax, item) for p, q in lots)
+                    inventory_value += proceeds
+                    mark_gross += gross
+                    mark_tax += gross - proceeds
+                    mark_rounding_numerator += gross * 100_000_000 - target * order.quantity
+                except UntradeablePrice:
+                    # A zero valuation bound is not a fill, liquidation or slot release.
+                    unpriceable_units += order.quantity
         equity = cash + inventory_value
         peak = max(peak, equity)
         drawdown = max(drawdown, (peak - equity) / peak)
@@ -266,6 +338,12 @@ def simulate(
                 "cash_gp": cash,
                 "equity_gp": equity,
                 "inventory_mark_gp": inventory_value,
+                "unpriceable_inventory_units": unpriceable_units,
+                "inventory_gross_mark_gp": mark_gross,
+                "inventory_mark_tax_gp": mark_tax,
+                "inventory_mark_rounding_gp": (
+                    None if legacy else mark_rounding_numerator / 100_000_000
+                ),
                 "capital_tied_gp": tied,
                 "active_slots": len(active),
             }
@@ -292,6 +370,17 @@ def simulate(
         "end_cash_gp": cash,
         "end_inventory_mark_gp": curve[-1]["inventory_mark_gp"],
         "end_inventory_units": sum(o.quantity for o in active.values()),
+        "end_unpriceable_inventory_units": curve[-1]["unpriceable_inventory_units"],
+        "end_inventory_gross_mark_gp": curve[-1]["inventory_gross_mark_gp"],
+        "end_inventory_mark_tax_gp": curve[-1]["inventory_mark_tax_gp"],
+        "end_inventory_mark_rounding_gp": curve[-1]["inventory_mark_rounding_gp"],
+        "price_rejections": sum(o["event"] == "price_rejected" for o in order_log),
+        "untradeable_at_granularity": sum(
+            o.get("reason") == "untradeable_at_granularity" for o in order_log
+        ),
+        "invalid_reference_price": sum(
+            o.get("reason") == "invalid_reference_price" for o in order_log
+        ),
         "end_open_buy_units": sum(o.remaining_buy for o in active.values()),
         "mean_capital_tied_gp": capital_seconds / (end - start),
         "peak_capital_tied_gp": max(p["capital_tied_gp"] for p in curve),
@@ -302,4 +391,22 @@ def simulate(
         "portfolio": asdict(portfolio),
         "tax": asdict(tax),
     }
+    for side in ("buy", "sell"):
+        events = [f for f in fills if f["side"] == side]
+        notional = sum(f["reference_notional_gp"] for f in events)
+        cost = sum(f["slippage_cost_gp"] for f in events)
+        metrics.update(
+            {
+                f"{side}_reference_notional_gp": notional,
+                f"{side}_slippage_cost_gp": cost,
+                f"{side}_effective_slippage_bps": cost * 10_000 / notional if notional else None,
+                f"{side}_tick_cost_gp": sum(f["tick_cost_gp"] for f in events),
+                f"{side}_effective_tick_bps": (
+                    sum(f["tick_cost_gp"] for f in events) * 10_000 / notional if notional else None
+                ),
+                f"{side}_cost_rounding_gp": sum(f["cost_rounding_numerator"] for f in events)
+                / 10_000,
+                f"{side}_fill_opportunities": len({f["opportunity_id"] for f in events}),
+            }
+        )
     return BacktestResult(metrics, fills, order_log, curve)

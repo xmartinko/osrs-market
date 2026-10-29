@@ -135,3 +135,94 @@ def test_aggregate_freshness_uncertainty_is_explicit():
     )
     assert not upper.orders
     assert lower.fills
+
+
+def test_cheap_bps_lots_preserve_quantity_cash_and_measure_costs():
+    frame = observations(volume=1000)
+    frame[["avg_high_price", "avg_low_price"]] = 3
+    assumptions = replace(ASSUMPTIONS, slippage_bps=5)
+    result = simulate(frame, {(1, 300): 1.0}, assumptions, PORTFOLIO)
+    assert result.metrics["buy_units_filled"] == 1000
+    assert result.metrics["sell_units_filled"] == 1000
+    assert result.metrics["buy_slippage_cost_gp"] == 1
+    assert result.metrics["sell_slippage_cost_gp"] == 1
+    assert result.metrics["buy_cost_rounding_gp"] == 0.5
+    assert result.metrics["sell_cost_rounding_gp"] == 0.5
+    assert result.metrics["net_gp"] == -2
+    assert result.metrics["end_cash_gp"] == 9998
+    assert all(f["price_gp"] >= 1 for f in result.fills)
+    # Reserve at 4, pay almost entirely at 3: reservation is not a paid cost.
+    assert result.orders[0]["buy_ceiling_gp"] == 4
+    assert result.equity[0]["capital_tied_gp"] == 1000 * 4
+
+
+def test_untradeable_sale_retains_inventory_slot_and_has_no_proceeds():
+    frame = observations(volume=1000)
+    frame["avg_high_price"] = 3
+    frame["avg_low_price"] = 1
+    assumptions = replace(ASSUMPTIONS, slippage_bps=5)
+    result = simulate(frame, {(1, 300): 1.0}, assumptions, PORTFOLIO)
+    assert result.metrics["sell_units_filled"] == 0
+    assert result.metrics["end_inventory_units"] == 1000
+    assert result.metrics["end_unpriceable_inventory_units"] == 1000
+    assert result.metrics["untradeable_at_granularity"] > 0
+    assert result.equity[-1]["active_slots"] == 1
+    assert result.metrics["end_cash_gp"] == 6999
+    assert result.metrics["end_inventory_mark_gp"] == 0
+    assert result.metrics["realized_gp"] == 0
+    assert all(f["side"] == "buy" for f in result.fills)
+    legacy = simulate(
+        frame, {(1, 300): 1.0}, replace(assumptions, price_model="legacy_v1"), PORTFOLIO
+    )
+    assert any(f["price_gp"] == 0 and f["side"] == "sell" for f in legacy.fills)
+
+
+def test_invalid_reference_is_logged_without_truncation_or_zero_division():
+    for invalid in (0, -1, 1.5):
+        frame = observations()
+        frame["avg_high_price"] = invalid
+        result = simulate(frame, signals(frame), ASSUMPTIONS, PORTFOLIO)
+        assert not result.fills
+        assert result.metrics["invalid_reference_price"] == len(frame)
+        assert all(o["event"] == "price_rejected" for o in result.orders)
+
+
+def test_tax_is_per_actual_integer_lot_not_fractional_mean():
+    frame = observations(volume=1000)
+    frame[["avg_high_price", "avg_low_price"]] = 50
+    result = simulate(frame, {(1, 300): 1.0}, replace(ASSUMPTIONS, slippage_bps=100), PORTFOLIO)
+    # Portfolio reserves 51 GP per unit, buys 196 units at 50/51, sells at 49/50.
+    assert result.metrics["buy_units_filled"] == 196
+    assert result.metrics["sell_units_filled"] == 196
+    sells = [f for f in result.fills if f["side"] == "sell"]
+    assert [(f["price_gp"], f["quantity"]) for f in sells] == [(49, 98), (50, 98)]
+    assert sum(f["tax_gp"] for f in sells) == 98
+    assert result.metrics["net_gp"] == -294
+
+
+def test_compose_terminal_costs_before_rounding_and_do_not_liquidate():
+    frame = observations(steps=3, volume=1000)
+    frame[["avg_high_price", "avg_low_price"]] = 3
+    result = simulate(
+        frame,
+        {(1, 300): 1.0},
+        replace(ASSUMPTIONS, slippage_bps=5, terminal_haircut_bps=100),
+        PORTFOLIO,
+    )
+    # Target mark is 3 * .9995 * .99 = 2.968515; ceil(2968.515) = 2969.
+    assert result.metrics["end_inventory_mark_gp"] == 2969
+    assert result.metrics["end_inventory_units"] == 1000
+    assert result.metrics["end_cash_gp"] == 6999
+    assert result.metrics["sell_units_filled"] == 0
+    assert result.metrics["net_gp"] == -32
+
+
+def test_explicit_tick_stress_is_recorded_separately_from_bps():
+    frame = observations(volume=1000)
+    frame[["avg_high_price", "avg_low_price"]] = 3
+    result = simulate(frame, {(1, 300): 1.0}, replace(ASSUMPTIONS, adverse_ticks=1), PORTFOLIO)
+    assert result.metrics["buy_tick_cost_gp"] == 1000
+    assert result.metrics["sell_tick_cost_gp"] == 1000
+    assert result.metrics["buy_slippage_cost_gp"] == 0
+    assert result.metrics["sell_slippage_cost_gp"] == 0
+    assert result.metrics["net_gp"] == -2000

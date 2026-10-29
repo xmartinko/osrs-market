@@ -1,7 +1,7 @@
 """Synthetic cases verify mechanics only; they are not market findings."""
 
 import json
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import numpy as np
@@ -213,7 +213,9 @@ def frozen_run(tmp_path):
             scores = {
                 (1, int(r.available_at)): float(getattr(r, model)) for r in predictions.itertuples()
             }
-            result = simulate(observations, scores, policies[name], portfolio)
+            result = simulate(
+                observations, scores, replace(policies[name], price_model="legacy_v1"), portfolio
+            )
             path = development / f"fold0/current_limits_sensitivity/{name}/{model}"
             path.mkdir(parents=True)
             (path / "metrics.json").write_text(json.dumps(result.metrics))
@@ -228,10 +230,24 @@ def test_complete_replay_controls_reproduction_and_immutability(frozen_run):
     run = json.loads((output / "run.json").read_text())
     assert run["status"] == "complete"
     assert run["original_presets_reproduced"]
+    assert run["legacy_presets_reproduced"] == 15
+    assert run["price_model"] == "integer_lots_v2"
     assert run["holdout_read"] is False
     assert not any("holdout" in p for p in run["development_artifacts"])
     assert results[results.model == "no_trade"].net_gp.eq(0).all()
     assert results[results.model == "no_trade"].vacuous.all()
+    deltas = pd.read_csv(output / "preset_deltas.csv")
+    assert len(deltas) == 15
+    assert (deltas.corrected_net_gp - deltas.legacy_net_gp == deltas.delta_net_gp).all()
+    assert deltas[deltas.scenario == "optimistic"].delta_net_gp.eq(0).all()
+    # These saved baselines were produced by legacy_v1, independently of v2.
+    assert deltas[deltas.scenario == "moderate"].delta_net_gp.ne(0).any()
+    for path in output.glob("fold*/*/*/fills.parquet"):
+        fills = pd.read_parquet(path)
+        if not fills.empty:
+            assert fills.price_gp.ge(1).all()
+            assert fills.cost_rounding_numerator.between(0, 9999).all()
+    assert len(list((output / "legacy_reproduction").glob("fold*/*/*/metrics.json"))) == 15
     assert (results.net_gp == results.end_cash_gp + results.end_inventory_mark_gp - 10000000).all()
     optimistic = results[results.scenario == "optimistic"].set_index("model")
     zero_slip = results[results.scenario == "passive_slip_0bps"].set_index("model")

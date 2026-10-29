@@ -15,8 +15,16 @@ class ExecutionAssumptions:
     freshness_basis: str = "upper_bound"
     passive_prices: bool = False
     queue_fill_bps: int = 10_000
+    price_model: str = "integer_lots_v2"
+    adverse_ticks: int = 0
 
     def __post_init__(self):
+        if self.price_model not in ("integer_lots_v2", "legacy_v1"):
+            raise ValueError("Unknown execution price model")
+        if type(self.adverse_ticks) is not int or self.adverse_ticks < 0:
+            raise ValueError("Tick stress must be a nonnegative integer")
+        if self.price_model == "legacy_v1" and self.adverse_ticks:
+            raise ValueError("Legacy replay has no separate tick stress")
         if self.freshness_basis not in ("lower_bound", "upper_bound"):
             raise ValueError("Freshness basis must be lower_bound or upper_bound")
         if not 0 < self.participation_bps <= 10_000:

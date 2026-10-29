@@ -12,7 +12,7 @@ import pyarrow.parquet as pq
 
 from .backtest import simulate
 from .cli import git_metadata
-from .costs import sale_proceeds
+from .costs import UntradeablePrice, price_target, sale_proceeds
 from .data import sha256
 from .execution import PRESETS, PortfolioPolicy
 
@@ -124,7 +124,7 @@ def fixed_fill_repricing(observations, result):
     counterfactual, never a second executable portfolio or realized market P&L.
     """
     policy = result.metrics["execution"]
-    if not policy["passive_prices"] or policy["slippage_bps"]:
+    if not policy["passive_prices"] or policy["slippage_bps"] or policy.get("adverse_ticks", 0):
         raise ValueError("Fixed-fill repricing requires passive zero-slippage execution")
     lookup = observations.set_index(KEYS)
     ledger = []
@@ -132,7 +132,11 @@ def fixed_fill_repricing(observations, result):
     for fill in result.fills:
         row = lookup.loc[(fill["item_id"], fill["timestamp"])]
         price = row["avg_high_price" if fill["side"] == "buy" else "avg_low_price"]
-        if pd.isna(price):
+        try:
+            if pd.isna(price):
+                raise UntradeablePrice("missing_reference_price")
+            price_target(price, 0, buy=fill["side"] == "buy")
+        except UntradeablePrice:
             missing += 1
             ledger.append({**fill, "crossed_cash_delta_gp": None, "cash_change_gp": None})
             continue
@@ -260,17 +264,20 @@ def diagnose(panel: Path, development_run: Path, output: Path, config_path: Path
         "source": metadata["source"],
         "limits": "current_limits_sensitivity",
         "holdout_read": False,
+        "price_model": "integer_lots_v2",
+        "legacy_reproduction_only": "legacy_v1; includes economically invalid fills",
         "holdout_start": metadata["holdout_start"],
         "folds": metadata["folds"],
         "portfolio": asdict(portfolio),
         "scenarios": {name: asdict(p) for name, p in policies.items()},
         "completed_scenarios": 0,
+        "legacy_presets_reproduced": 0,
         "models": MODELS,
         "warning": "Development execution sensitivity; hypothetical fills, current limits lookahead. "
         "Grid points are not model selection or calibrated execution. Zero buys are inconclusive.",
     }
     atomic_json(output / "run.json", run)
-    rows, matched = [], []
+    rows, matched, deltas = [], [], []
     try:
         for i, fold in enumerate(metadata["folds"]):
             # Predicate filtering keeps holdout observations out of the loaded frame.
@@ -300,17 +307,51 @@ def diagnose(panel: Path, development_run: Path, output: Path, config_path: Path
             }
             for name, assumptions in policies.items():
                 for model in MODELS:
-                    result = simulate(observations, scores[model], assumptions, portfolio)
                     if name in BASELINES:
+                        legacy = simulate(
+                            observations,
+                            scores[model],
+                            replace(assumptions, price_model="legacy_v1"),
+                            portfolio,
+                        )
                         reference = (
                             development_run
                             / f"fold{i}/current_limits_sensitivity/{name}/{model}/metrics.json"
                         )
                         expected = json.loads(reference.read_text())
-                        if any(result.metrics[k] != expected[k] for k in COMPARABLE):
+                        if any(legacy.metrics[k] != expected[k] for k in COMPARABLE):
                             raise ValueError(
                                 f"Original preset reproduction failed: fold{i}/{name}/{model}"
                             )
+                        legacy_path = output / "legacy_reproduction" / f"fold{i}" / name / model
+                        legacy_path.mkdir(parents=True)
+                        for kind in ("fills", "orders", "equity"):
+                            pd.DataFrame(getattr(legacy, kind)).to_parquet(
+                                legacy_path / f"{kind}.parquet", index=False
+                            )
+                        atomic_json(legacy_path / "metrics.json", legacy.metrics)
+                        run["legacy_presets_reproduced"] += 1
+                        atomic_json(output / "run.json", run)
+                    result = simulate(observations, scores[model], assumptions, portfolio)
+                    if name in BASELINES:
+                        deltas.append(
+                            {
+                                "fold": i,
+                                "scenario": name,
+                                "model": model,
+                                "legacy_zero_price_sale_units": sum(
+                                    f["quantity"]
+                                    for f in legacy.fills
+                                    if f["side"] == "sell" and f["price_gp"] == 0
+                                ),
+                                **{f"legacy_{k}": legacy.metrics[k] for k in COMPARABLE},
+                                **{f"corrected_{k}": result.metrics[k] for k in COMPARABLE},
+                                **{
+                                    f"delta_{k}": result.metrics[k] - legacy.metrics[k]
+                                    for k in COMPARABLE
+                                },
+                            }
+                        )
                     path = output / f"fold{i}" / name / model
                     pending = path.with_name(model + ".partial")
                     pending.mkdir(parents=True)
@@ -367,6 +408,7 @@ def diagnose(panel: Path, development_run: Path, output: Path, config_path: Path
         results = pd.DataFrame(rows)
         results.to_parquet(output / "results.parquet", index=False)
         results.to_csv(output / "results.csv", index=False)
+        pd.DataFrame(deltas).to_csv(output / "preset_deltas.csv", index=False)
         pd.DataFrame(matched).to_csv(output / "fixed_fill_repricing.csv", index=False)
         # Ensure no input changed during a potentially long replay.
         if sha256(panel) != hashes["panel"] or sha256(config_path) != hashes["config"]:
@@ -386,7 +428,8 @@ def diagnose(panel: Path, development_run: Path, output: Path, config_path: Path
             flush=True,
         )
         print(
-            f"Completed {len(rows)} development sensitivities; original presets reproduced; "
+            f"Completed {len(rows)} corrected development sensitivities; "
+            f"{run['legacy_presets_reproduced']} original presets reproduced with legacy_v1; "
             f"holdout NOT read. Artifacts: {output.resolve()}",
             flush=True,
         )

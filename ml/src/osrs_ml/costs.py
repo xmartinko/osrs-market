@@ -1,6 +1,7 @@
 """Integer GP arithmetic. Tax is floored and capped PER ITEM, then multiplied."""
 
 from dataclasses import dataclass
+from numbers import Integral
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,7 @@ def sale_proceeds(
 
 
 def execution_price(price_gp: int, adverse_bps: int, *, buy: bool) -> int:
+    """Legacy adverse per-unit rounding. ONLY for reproducing superseded v1 runs."""
     if price_gp < 0 or not 0 <= adverse_bps <= 10_000:
         raise ValueError("Invalid execution cost")
     # Round against the trader on both sides, using integers even above 2**31.
@@ -43,6 +45,43 @@ def execution_price(price_gp: int, adverse_bps: int, *, buy: bool) -> int:
         if buy
         else price_gp * (10_000 - adverse_bps) // 10_000
     )
+
+
+class UntradeablePrice(ValueError):
+    """An explicit failed price opportunity, never a zero-price fill."""
+
+
+def price_target(price_gp: int, adverse_bps: int, *, buy: bool, ticks: int = 0) -> int:
+    """Exact target unit price in ten-thousandths of a GP (no rounding)."""
+    if isinstance(price_gp, bool) or not isinstance(price_gp, Integral) or price_gp < 1:
+        raise UntradeablePrice("invalid_reference_price")
+    if type(adverse_bps) is not int or not 0 <= adverse_bps <= 10_000:
+        raise ValueError("Invalid bps cost")
+    if type(ticks) is not int or ticks < 0:
+        raise ValueError("Invalid tick stress")
+    adjustment = int(price_gp) * adverse_bps + ticks * 10_000
+    target = int(price_gp) * 10_000 + (adjustment if buy else -adjustment)
+    if target < 10_000:
+        raise UntradeablePrice("untradeable_at_granularity")
+    return target
+
+
+def integer_lots(
+    target: int, quantity: int, *, buy: bool, denominator: int = 10_000
+) -> list[tuple[int, int]]:
+    """Allocate a target mean to legal GP lots, rounding <1 GP toward zero cost.
+
+    This deterministic notional-cost distribution is hypothetical, not observed
+    trade prints or a calibrated fill probability. No per-unit adverse rounding.
+    """
+    if denominator <= 0 or target < denominator:
+        raise UntradeablePrice("untradeable_at_granularity")
+    if type(quantity) is not int or quantity < 0:
+        raise ValueError("Invalid lot quantity")
+    low, remainder = divmod(target, denominator)
+    # Buy gross rounds down, sale gross rounds up: residual cost is explicit.
+    high_units = (quantity * remainder + (0 if buy else denominator - 1)) // denominator
+    return [(p, q) for p, q in ((low, quantity - high_units), (low + 1, high_units)) if q]
 
 
 def net_return(
