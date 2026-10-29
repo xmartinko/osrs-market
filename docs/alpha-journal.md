@@ -122,3 +122,71 @@ remaining book cost**. Gross terminal inventory value alone does not measure the
 contribution of appreciation to net profit. No new strategy or parameter search,
 holdout access, synthetic profit evidence or C++ change is authorized by this audit.
 Completion and executed verification will be appended below.
+
+### Completion appended — conversion spread survives attribution, inference unchanged
+
+Registered in `b53486f`; tested reconstruction committed in `433fa7c` before the
+attribution run. All three original processing shares reconcile to saved metrics
+and to every equity timestamp: **420 development source rows and 252 account
+timestamps**. The [full validation](processing-attribution-validation.md) records
+all shares, components, inventory accounting, waits, limitations and reproduction.
+External artifacts are `/home/martin/osrs-data/processing-attribution-v1`.
+
+**Numbers (0.1% / 1% / 5%):** net GP +1,053,603 / +1,764,761 / +1,764,761;
+simulated realized GP +1,102,393 / +2,054,103 / +2,054,103; remaining input book
+507,674 / 1,943,729 / 1,943,729; terminal mark 458,884 / 1,654,387 / 1,654,387;
+**unrealized losses −48,790 / −289,342 / −289,342**. Cash changes remain
++594,719 / +110,374 / +110,374. Produced/fully-sold batches are 6/6, 8/8, 8/8
+out of 11/16/16 submissions. All produced output sells; final inputs number
+2,746 / 9,900 / 9,900. All batches are positive in the simulation; largest batch
+is 25.51% / 16.25% / 16.25% of realized P&L. Shares are dependent sensitivities.
+
+At 1%, realized +2,054,103 GP decomposes exactly into **+2,115,300 GP decision
+conversion spread, −60,977 GP input movement, −220 GP output movement**. Production
+requires eight modeled active hours, or 256,762.88 realized GP/active hour;
+marked rate remains 220,595.13 GP/active hour and 885.92 GP/elapsed hour over
+1,992 hours. Input/production waits are 72–120h, final output sales another 48h.
+The 1% and 5% fill paths are identical. No new profit inference was performed;
+all original raw/Bonferroni-adjusted **p=1.0** and activity failures remain intact.
+
+**Explicit interpretation correction:** cycle 1 emphasized the 1,654,387 GP gross
+inventory mark and small cash change. Those numbers were correct, but they must
+not be read as evidence that inventory appreciation supplied the simulated profit.
+The correct contribution is **mark less remaining book cost**, a loss of 289,342 GP
+at 1%. Cash change is realized profit less purchases still in inventory. The saved
+realized metric was independently reproduced, not newly created by this audit.
+
+**Learned / ruled out / next lead:** terminal appreciation does not explain this
+processing gain, and later output movement supplies essentially none of it. The
+candidate mechanism is the original conversion spread. Stranded inputs reduce
+profit and tie up cash; partial input costs can also be reused by later batches.
+This strengthens processing's priority as a prospective **measurement** lead,
+without turning a six/eight-completion corrected failure into a survivor. Next
+pre-register own-fill calibration of the fixed mechanism, including both input
+legs, failed submissions and stranded inventory, actual output tax, active time
+and capital occupancy. Do not tune inventory netting or relax the activity gate
+on these results. Attainable fills and expected executable profit remain unknown.
+
+Procedural note: an exploratory schema/head read followed run-provenance checks
+but preceded per-artifact hash verification. The subsequent 15 artifact hashes
+all matched the cycle-1 audit. The committed executable enforces artifact checks
+before scenario reads. No economic parameter or audit definition changed after
+outcomes. The reserved holdout stayed sealed; no later market fields, training,
+synthetic profit data, Gaussian inference or C++ changes were used.
+
+The ten new accounting/integrity tests failed before implementation (missing
+module), then passed. Full executed verification from `ml/`:
+
+```text
+162 passed in 32.29s
+All checks passed!
+PASS: 3 unchanged processing accounts attributed; original inference retained; holdout NOT read
+PASS: 420 development source rows; 252 equity timestamps reconciled; all 10 output hashes verified; original adjusted p=1 for all three shares; holdout_read=False
+```
+
+The output summary SHA-256 is
+`88b43dd698846691fcc23dba044c07d9069dbbd23158ff0327919885b9b33544`.
+
+The original independent 213-scenario audit was also rerun after attribution:
+passed, 23,537 fills, 22 productions, zero negative cash, capacity violations or
+holdout rows, `holdout_read=false`. Existing battery artifacts remain unchanged.

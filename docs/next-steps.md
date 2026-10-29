@@ -273,3 +273,23 @@ of the **old reported** sign change, but cannot use the old costs to claim that
 calibrated execution destroys the signal. Executable edge remains undecidable;
 no model was reselected, and no holdout was read or unlocked. Proceed to own-fill
 calibration and prospective data qualification, not a larger model tournament.
+
+## After processing attribution, 2026-10-29 — cycle 2
+
+The [executed fixed-account attribution](processing-attribution-validation.md)
+completes the processing batch/input audit suggested above. At 1%, simulated
+realized production P&L is **+2,054,103 GP**, remaining input book cost 1,943,729 GP,
+and terminal mark 1,654,387 GP: **−289,342 GP unrealized**, leaving +1,764,761 GP
+net and +110,374 GP cash change. Gross marked inventory must not be interpreted
+as profit from appreciation. All 13,200 produced bows sold; 9,900 input units
+remain. Decision-time conversion spread contributes +2,115,300 GP, followed by
+−60,977 GP input cost movement and −220 GP output movement.
+
+All three original participation cases reconcile, but retain original adjusted
+**p=1.0** with six/eight/eight completed batches. No strategy was retuned and no
+new significance test was added. Processing remains a structural measurement
+lead: next pre-register prospective own-fill calibration of the fixed recipe,
+including both input legs, failed submissions, output tax, active time and
+inventory exposure. The unchanged 1% and 5% paths give no reason to expect a
+larger participation assumption alone to solve the measurement problem. Keep the
+reserved holdout sealed; the historical audit supplies no actual execution data.
