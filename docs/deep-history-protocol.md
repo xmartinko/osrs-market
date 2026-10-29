@@ -100,3 +100,43 @@ CI. An unidentified continuous/attainable break-even must be reported as such,
 even when this proxy statistic has a finite interval. Equity increments cannot
 identify activity on a resampled account; use the original buy/sell activity gate
 and disclose that condition. No interpolation and no assumption of monotonic P&L.
+
+## Implementation definitions (2026-10-29, before cross-era results)
+
+Use the observed integer `overallPrice` for price changes and log price; relative
+spread is `(buyingPrice-sellingPrice)/overallPrice`. Feature-eligible weeks require
+positive overall and side prices and positive completed volume on both sides;
+signed/inverted spreads remain diagnostic observations. All raw and coverage rows
+remain retained. One/four-week returns require exact timestamp matches; four-week
+volatility requires four consecutive one-week log returns. No gap filling. Labels
+are forward overall-price returns at exact one/four-week timestamps, with label
+availability at the **end** of the future weekly bucket plus 300 seconds. Both
+fitting and annual test summaries purge labels reaching the next era boundary or
+the holdout. The constant-tax diagnostic subtracts the exact per-unit tax on the
+future observed overall price; this remains a price diagnostic, not a fill claim.
+
+The six allowed features enter the linear ridge fit after train-only median
+imputation and scaling; the target is the within-week cross-sectional fractional
+rank of the forward return, centered at 0.5. Penalty is 1 with an unpenalized
+intercept. No item identifiers, missing indicators, dates or ages enter fitting.
+Separate fits use each fixed horizon, expanding from 2017–2019. In addition to
+the rank fit, report the fixed one/four-week momentum and their sign reversals,
+spread fraction and observed-volume rankings, with no choice between them after
+results. The top group is the upper decile of each observed weekly score ranking
+(including ties at the cutoff); the universe is the same feature/label-eligible
+weekly cross section. Spearman correlations and top-minus-universe returns are
+computed weekly before bootstrapping entire weeks. An adequately observed era
+requires at least 20 weekly cross sections with at least 20 items each; all other
+eras are explicitly inconclusive. A claimed stable price-ranking rule must have
+positive lower 95% bounds on both rank correlation and **after-tax** top-minus-
+universe diagnostic in every adequate era, at both predeclared block lengths.
+This strict screen is a rejection diagnostic, not an executable-profit test.
+
+Normality screens use ordered exact log returns and signed spreads per item and
+within fixed train-volume terciles. Pooled bands concatenate items within weeks;
+their lag screen is supplemented by lag-one correlation of the weekly band mean.
+Gaussian mean intervals are only reported for eligible per-item series; band and
+cross-era intervals always preserve whole weeks with empirical blocks. Report
+how many per-item series pass and fail, including insufficient/constant samples.
+Common-item annual median spread, tax-adjusted margin, volume and momentum
+ranking correlations quantify descriptive stability, with common-item counts.
