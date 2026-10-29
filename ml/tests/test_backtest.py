@@ -1,6 +1,7 @@
 from dataclasses import replace
 
 import pandas as pd
+
 from osrs_ml.backtest import simulate
 from osrs_ml.execution import ExecutionAssumptions, PortfolioPolicy
 

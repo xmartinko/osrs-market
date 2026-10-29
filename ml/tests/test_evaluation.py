@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
+
 from osrs_ml.data import load_snapshot
 from osrs_ml.evaluation import split_fold, walk_forward_folds
 from osrs_ml.features import FULL_FEATURES, build_features

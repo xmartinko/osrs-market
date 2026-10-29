@@ -1,4 +1,5 @@
 import pytest
+
 from osrs_ml.costs import TaxPolicy, execution_price, sale_proceeds, tax_per_item
 
 

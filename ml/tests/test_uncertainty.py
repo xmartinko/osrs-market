@@ -3,6 +3,8 @@ import json
 import numpy as np
 import pandas as pd
 import pytest
+from scipy import stats
+
 from osrs_ml.uncertainty import (
     block_indices,
     daily_uncertainty,
@@ -12,7 +14,6 @@ from osrs_ml.uncertainty import (
     normality,
     threshold_summary,
 )
-from scipy import stats
 
 
 def test_block_resampling_only_uses_real_indices_preserves_local_order_and_pairing():

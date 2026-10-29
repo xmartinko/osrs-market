@@ -1,6 +1,7 @@
 import sqlite3
 
 import pytest
+
 from osrs_ml.collector import archive_observations, publish
 from osrs_ml.forward import connect, issue, paper, settle
 

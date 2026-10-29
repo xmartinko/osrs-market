@@ -127,3 +127,39 @@ def test_connection_retry_but_no_retry_on_404_or_bad_json(tmp_path, monkeypatch)
     with pytest.raises(RuntimeError, match="paused"):
         Archive(tmp_path, retries=2).fetch("connection", "https://example.org")
     assert sleeps == [1.0, 2.0]
+
+
+def test_full_universe_bounded_concurrency_and_cached_resume(tmp_path, monkeypatch):
+    import io
+    from threading import Barrier, Lock
+
+    from osrs_ml import weekly_ingest as module
+
+    monkeypatch.setenv("OSRS_DATA_DIR", str(tmp_path))
+    dev = tmp_path / "development"
+    dev.mkdir()
+    (dev / "run.json").write_text(json.dumps({"holdout_start": WEEK * 10}))
+    gate, mutex = Barrier(2), Lock()
+    active, maximum, calls = 0, 0, []
+    def response(request, **kwargs):
+        nonlocal active, maximum
+        calls.append(request.full_url)
+        if request.full_url.endswith("/items"):
+            return io.BytesIO(json.dumps({"data": [{"itemId": i} for i in (2, 3, 4, 5)]}).encode())
+        with mutex:
+            active += 1
+            maximum = max(maximum, active)
+        gate.wait(timeout=5)
+        with mutex:
+            active -= 1
+        return io.BytesIO(b'{"data": []}')
+    monkeypatch.setattr(module.urllib.request, "urlopen", response)
+    root = tmp_path / "archive"
+    module.run(root, True, dev, workers=2)
+    assert maximum == 2 and len(calls) == 5
+    manifest = json.loads((root / "run.json").read_text())
+    assert manifest["status"] == "complete" and manifest["completed"] == 4
+    assert not manifest["holdout_read"]
+    module.run(root, True, dev, workers=2)
+    assert len(calls) == 5
+    assert pd.read_csv(root / "coverage.csv").item_id.tolist() == [2, 3, 4, 5]

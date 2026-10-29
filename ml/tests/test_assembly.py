@@ -4,6 +4,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+
 from osrs_ml.assembly import DAY, assemble, union_observations
 from osrs_ml.data import load_snapshot
 

@@ -5,6 +5,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+
 from osrs_ml.data import EXPORT_SQL, FIELDS, SCHEMA, export_postgres, load_snapshot, manifest
 from osrs_ml.fixture import write_fixture
 

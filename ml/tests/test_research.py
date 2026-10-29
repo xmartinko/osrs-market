@@ -2,6 +2,7 @@ import json
 
 import numpy as np
 import pandas as pd
+
 from osrs_ml.research import DAY, FEATURES, daily_features, forecasts
 
 
