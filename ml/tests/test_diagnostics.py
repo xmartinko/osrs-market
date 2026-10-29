@@ -278,3 +278,19 @@ def test_corrupt_inputs_and_baseline_drift_fail_closed(frozen_run):
     assert run["completed_scenarios"] == 2
     assert (output / "fold0/optimistic/no_trade/metrics.json").exists()
     assert not (output / "results.parquet").exists()
+
+
+@pytest.mark.parametrize("column,value", [("price_gp", 0), ("cost_rounding_numerator", 10000)])
+def test_independent_audit_rejects_corrupt_price_or_residual(frozen_run, column, value):
+    from osrs_ml.execution_audit import audit
+
+    panel, development, output, config_path = frozen_run
+    diagnose(panel, development, output, config_path)
+    summary = audit(output, panel)
+    assert summary["scenarios"] == 95
+    path = output / "fold0/optimistic/catboost/fills.parquet"
+    fills = pd.read_parquet(path)
+    fills.loc[0, column] = value
+    fills.to_parquet(path, index=False)
+    with pytest.raises(ValueError, match="Illegal nonpositive|rounding residual"):
+        audit(output, panel)

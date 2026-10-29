@@ -21,7 +21,14 @@ Use a new output directory. The command reads only the saved development forecas
 paths and filters panel observations to each recorded development fold before loading them.
 It trains no models and does not select parameters or open holdout artifacts. It checks
 panel/config/dependency hashes, decision-key coverage and original-preset P&L/quantity
-reproduction. Undefined saved scores are retained only where required prices are missing
+reproduction using quarantined `legacy_v1` arithmetic. Main results use
+`integer_lots_v2`: positive whole-GP price lots, notional bps costs with an explicit
+fractional-GP residual, and per-lot tax. Unrepresentable sale prices retain inventory
+and log `untradeable_at_granularity`; zero terminal valuations are not fills.
+`adverse_ticks` is a separate deterministic stress, default zero. The split into
+adjacent integer lots is a hypothetical cost allocation, not evidence about actual
+fill prices or fill probability. See the [price specification](../docs/execution-price-correction.md).
+Undefined saved scores are retained only where required prices are missing
 or inverted. They remain ineligible for trading, as in the original executor.
 
 All five models face 19 fixed scenarios: the three original presets, seven one-factor
@@ -35,7 +42,13 @@ Every completed replay publishes fills, orders, equity and metrics, so partial r
 retain evidence. Only `status=complete` certifies the full grid and original-preset
 reproduction. Existing outputs cannot be overwritten; failed attempts remain visible.
 `results.parquet`/`results.csv` report per-fold P&L, actual tax charged in the simulation,
-fill events, bought/sold units, terminal inventory and zero-buy/inventory-only status.
+fill lots, bought/sold units, terminal inventory and zero-buy/inventory-only status.
+Two price lots can represent one fill opportunity; use `opportunity_id` or the
+`buy_fill_opportunities`/`sell_fill_opportunities` metrics to compare opportunity counts.
+Reference notionals, achieved bps, paid costs, tick costs and rounding residuals are
+separate fields. Conservative offer reservations are not paid slippage.
+`legacy_reproduction/` preserves the three original presets for each model/fold;
+`preset_deltas.csv` gives their corrected P&L, cash, marks and exposure differences.
 Input-gate counts overlap and do not attribute dynamic cash or slot rejections.
 
 `fixed_fill_repricing.csv` and per-model repricing ledgers hold the optimistic quantities,
@@ -47,6 +60,17 @@ prices produce an incomplete diagnostic rather than invented prices.
 Every output remains **current_limits_sensitivity**, with hypothetical aggregate fills
 and historical capacity lookahead. Neither positive GP nor zero-buy GP demonstrates
 live profitability. See the assessment for the calibration and prospective evaluation gates.
+
+Audit a completed corrected replay independently:
+
+```bash
+uv run --project ml --frozen python -m osrs_ml.execution_audit \
+  "$OSRS_DATA_DIR/execution-diagnostics-new" "$OSRS_DATA_DIR/assembled-v3/daily.parquet"
+```
+
+The audit loads only the manifest's development folds and verifies legal prices,
+cash/inventory accounting, costs and residuals, tax, capacity, limits, timing,
+offer ceilings, marks and no-trade invariants. It cannot establish achievable fills.
 
 ## Original harness usage
 
