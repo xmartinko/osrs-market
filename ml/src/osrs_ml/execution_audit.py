@@ -54,6 +54,13 @@ def audit(output: Path, panel: Path) -> dict:
                     for o in orders
                     if o["event"] == "buy_submitted"
                 }
+                sell_orders = {
+                    (int(o["item_id"]), int(o["timestamp"])): o
+                    for o in orders
+                    if o["event"] == "sell_submitted"
+                }
+                bounded = policy.get("fill_model") == "volume_bounded_v3"
+                consumed = defaultdict(int)
                 requested_fills = defaultdict(int)
                 if not fills.empty:
                     require(fills.price_gp.ge(1).all(), "Illegal nonpositive fill price")
@@ -79,6 +86,15 @@ def audit(output: Path, panel: Path) -> dict:
                             else ("high" if buying else "low")
                         )
                         reference = int(row[f"avg_{price_side}_price"])
+                        if bounded:
+                            submission = (buy_orders if buying else sell_orders)[(item, submitted)]
+                            reference = int(submission["reference_price_gp"])
+                            history = lookup.xs(item, level="item_id")
+                            submission_row = history.loc[history.index <= submitted].iloc[-1]
+                            require(
+                                reference == int(submission_row[f"avg_{price_side}_price"]),
+                                "Submission reference drift",
+                            )
                         q = int(group.quantity.sum())
                         require(group.reference_price_gp.eq(reference).all(), "Reference drift")
                         target = (
@@ -107,6 +123,50 @@ def audit(output: Path, panel: Path) -> dict:
                             * (policy["participation_bps"] * policy["queue_fill_bps"])
                             // 100_000_000
                         )
+                        if bounded:
+                            threshold = target // 10000 if buying else (target + 9999) // 10000
+                            n = int(row[f"{price_side}_price_volume"])
+                            mean = int(row[f"avg_{price_side}_price"])
+                            if policy["volume_qualification"] == "mean_proxy":
+                                compatible = (
+                                    n if (mean <= threshold if buying else mean >= threshold) else 0
+                                )
+                            elif buying:
+                                compatible = n if max(1, mean - 1) <= threshold else max(0, n - 1)
+                            else:
+                                compatible = (
+                                    n if threshold == 1 else min(n, n * mean // (threshold - 1))
+                                )
+                            capacity = compatible * policy["participation_bps"] // 10000
+                            for field, expected in (
+                                ("qualification_price_gp", threshold),
+                                ("bucket_volume", n),
+                                ("bucket_mean_gp", mean),
+                                ("compatible_volume_upper_or_proxy", compatible),
+                                ("participation_capacity", capacity),
+                            ):
+                                require(
+                                    group[field].eq(expected).all(),
+                                    "Qualification/capacity audit field drift",
+                                )
+                            consumed[(item, now, side)] += q
+                            require(consumed[(item, now, side)] <= capacity, "Bucket volume reused")
+                            interval = row.source_interval_seconds
+                            interval = int(
+                                row.resolution_seconds if pd.isna(interval) else interval
+                            )
+                            require(
+                                group.bucket_start.eq(int(row.timestamp)).all()
+                                and group.bucket_end.eq(int(row.timestamp) + interval).all(),
+                                "Bucket survival audit field drift",
+                            )
+                            if buying:
+                                require(
+                                    now < submitted + policy["buy_timeout_seconds"]
+                                    and int(row.timestamp) + interval
+                                    <= submitted + policy["buy_timeout_seconds"],
+                                    "Order did not survive bucket",
+                                )
                         require(q <= capacity, "Capacity exceeded by price lots")
                         require(
                             now > submitted + policy["latency_seconds"]

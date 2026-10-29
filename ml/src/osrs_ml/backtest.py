@@ -36,6 +36,10 @@ class Order:
     first_fill: int | None = None
     sell_submitted: int | None = None
     stage: str = "buy"
+    buy_reference: int | None = None
+    buy_target: int | None = None
+    sell_reference: int | None = None
+    sell_target: int | None = None
 
 
 @dataclass
@@ -48,6 +52,19 @@ class BacktestResult:
 
 def present(row: dict, name: str) -> bool:
     return name in row and not pd.isna(row[name])
+
+
+def compatible_volume(volume: int, mean: int, threshold: int, *, buy: bool, rule: str) -> int:
+    """Conditional proxy or loose moment upper bound; never an own-fill guarantee."""
+    if volume < 0 or min(mean, threshold) < 1:
+        raise ValueError("Positive prices and nonnegative volume required")
+    if rule == "mean_proxy":
+        return volume if (mean <= threshold if buy else mean >= threshold) else 0
+    if rule != "moment_upper":
+        raise ValueError("Unknown volume qualification")
+    if buy:
+        return volume if max(1, mean - 1) <= threshold else max(0, volume - 1)
+    return volume if threshold == 1 else min(volume, volume * mean // (threshold - 1))
 
 
 def simulate(
@@ -74,6 +91,7 @@ def simulate(
     peak = portfolio.initial_cash_gp
     drawdown = 0.0
     legacy = assumptions.price_model == "legacy_v1"
+    bounded = assumptions.fill_model == "volume_bounded_v3"
     opportunity_id = 0
 
     def target_price(reference, *, buy, now, item, phase):
@@ -155,9 +173,34 @@ def simulate(
                 and order.first_fill is not None
                 and now >= order.first_fill + portfolio.holding_seconds
             ):
+                if bounded:
+                    row = latest.get(item)
+                    if row is None or not fresh(row, "high", now):
+                        continue
+                    target = target_price(
+                        row["avg_high_price"], buy=False, now=now, item=item, phase="submission"
+                    )
+                    if target is None:
+                        continue
+                    order.sell_reference = int(row["avg_high_price"])
+                    order.sell_target = target
                 order.stage = "sell"
                 order.sell_submitted = now
-                order_log.append({"timestamp": now, "item_id": item, "event": "sell_submitted"})
+                order_log.append(
+                    {
+                        "timestamp": now,
+                        "item_id": item,
+                        "event": "sell_submitted",
+                        **(
+                            {
+                                "reference_price_gp": order.sell_reference,
+                                "target_numerator": order.sell_target,
+                            }
+                            if bounded
+                            else {}
+                        ),
+                    }
+                )
                 # A newly submitted sale cannot consume this same observation.
                 continue
             row = rows.get(item)
@@ -180,7 +223,47 @@ def simulate(
             )
             buying = order.stage == "buy"
             reference = row[f"avg_{side}_price"]
-            target = target_price(reference, buy=buying, now=now, item=item, phase="fill")
+            bucket_volume = int(row[f"{side}_price_volume"])
+            qualifying = bucket_volume
+            threshold = None
+            if bounded:
+                # Validate aggregate prices too; never truncate malformed means.
+                try:
+                    price_target(reference, 0, buy=buying)
+                except UntradeablePrice as error:
+                    order_log.append(
+                        dict(
+                            timestamp=now,
+                            item_id=item,
+                            event="price_rejected",
+                            phase="qualification",
+                            reason=str(error),
+                        )
+                    )
+                    continue
+                interval = (
+                    int(row["source_interval_seconds"])
+                    if present(row, "source_interval_seconds")
+                    else int(row["resolution_seconds"])
+                )
+                # Whole buckets only; no invented intrabucket survival or limit resets.
+                if buying and int(row["timestamp"]) + interval > (
+                    order.submitted + assumptions.buy_timeout_seconds
+                ):
+                    continue
+                reference = order.buy_reference if buying else order.sell_reference
+                target = order.buy_target if buying else order.sell_target
+                threshold = target // 10_000 if buying else (target + 9999) // 10_000
+                qualifying = compatible_volume(
+                    bucket_volume,
+                    int(row[f"avg_{side}_price"]),
+                    threshold,
+                    buy=buying,
+                    rule=assumptions.volume_qualification,
+                )
+                capacity = qualifying * assumptions.participation_bps // 10_000
+            else:
+                target = target_price(reference, buy=buying, now=now, item=item, phase="fill")
             if target is None:
                 continue
             if buying and (target + 9999) // 10_000 > order.buy_ceiling:
@@ -252,6 +335,19 @@ def simulate(
                         "tick_cost_gp": assumptions.adverse_ticks * units,
                         # One residual per opportunity, not once per price lot.
                         "cost_rounding_numerator": residual if lot_index == 0 else 0,
+                        **(
+                            {
+                                "bucket_volume": bucket_volume,
+                                "compatible_volume_upper_or_proxy": qualifying,
+                                "participation_capacity": capacity,
+                                "qualification_price_gp": threshold,
+                                "bucket_mean_gp": int(row[f"avg_{side}_price"]),
+                                "bucket_start": int(row["timestamp"]),
+                                "bucket_end": int(row["timestamp"]) + interval,
+                            }
+                            if bounded
+                            else {}
+                        ),
                     }
                 )
 
@@ -283,7 +379,15 @@ def simulate(
             quantity = min(budget // ceiling, available_limit(item, now, row))
             if quantity <= 0:
                 continue
-            active[item] = Order(item, now, quantity, ceiling, quantity)
+            active[item] = Order(
+                item,
+                now,
+                quantity,
+                ceiling,
+                quantity,
+                buy_reference=int(row["avg_low_price"]) if bounded else None,
+                buy_target=target if bounded else None,
+            )
             requested += quantity
             order_log.append(
                 {
@@ -293,6 +397,14 @@ def simulate(
                     "quantity": quantity,
                     "score": score,
                     "buy_ceiling_gp": ceiling,
+                    **(
+                        {
+                            "reference_price_gp": int(row["avg_low_price"]),
+                            "target_numerator": target,
+                        }
+                        if bounded
+                        else {}
+                    ),
                 }
             )
 

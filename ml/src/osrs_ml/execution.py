@@ -17,8 +17,22 @@ class ExecutionAssumptions:
     queue_fill_bps: int = 10_000
     price_model: str = "integer_lots_v2"
     adverse_ticks: int = 0
+    fill_model: str = "bucket_proxy_v1"
+    volume_qualification: str = "mean_proxy"
 
     def __post_init__(self):
+        if self.fill_model not in ("bucket_proxy_v1", "volume_bounded_v3"):
+            raise ValueError("Unknown fill model")
+        if self.volume_qualification not in ("mean_proxy", "moment_upper"):
+            raise ValueError("Unknown volume qualification")
+        if self.fill_model == "volume_bounded_v3" and (
+            self.price_model != "integer_lots_v2"
+            or not self.passive_prices
+            or self.queue_fill_bps != 10_000
+        ):
+            raise ValueError(
+                "Volume bounds require corrected passive prices and no queue multiplier"
+            )
         if self.price_model not in ("integer_lots_v2", "legacy_v1"):
             raise ValueError("Unknown execution price model")
         if type(self.adverse_ticks) is not int or self.adverse_ticks < 0:
@@ -27,7 +41,9 @@ class ExecutionAssumptions:
             raise ValueError("Legacy replay has no separate tick stress")
         if self.freshness_basis not in ("lower_bound", "upper_bound"):
             raise ValueError("Freshness basis must be lower_bound or upper_bound")
-        if not 0 < self.participation_bps <= 10_000:
+        if not 0 <= self.participation_bps <= 10_000 or (
+            self.participation_bps == 0 and self.fill_model != "volume_bounded_v3"
+        ):
             raise ValueError("Invalid participation")
         if not 0 < self.queue_fill_bps <= 10_000:
             raise ValueError("Invalid queue fill assumption")

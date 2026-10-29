@@ -190,3 +190,39 @@ Larger cross-run registry/scheduler, downside-aware portfolio optimization, quan
 foundation adapters, stacked CatBoost ranker, event/category features and an append-only live
 prediction log are planned, not implemented. Historical foundation-model evaluation may overlap
 unknown pretraining data; a prospective forward test is required before believing an edge.
+
+## Participation bounds on frozen development predictions
+
+The [reasoning and frozen protocol](../docs/participation-bounds.md) distinguish
+reported passive fills from our unknown queue allocation. Run the fixed grid with:
+
+```bash
+OSRS_DATA_DIR=/home/martin/osrs-data uv run --project ml --frozen \
+  python -m osrs_ml.participation \
+  --panel /home/martin/osrs-data/assembled-v3/daily.parquet \
+  --development-run ml/runs/phase2-real-v1 \
+  --output /home/martin/osrs-data/participation-bounds-v3
+```
+
+`volume_bounded_v3` freezes order prices, requires entire eligible buckets to occur
+while the order is live, and caps each partial fill by the chosen share of
+price-compatible reported volume, remaining quantity and buy allowance. It keeps
+`integer_lots_v2` arithmetic. Existing `bucket_proxy_v1` policies remain the default
+for reproduction. `mean_proxy` qualifies on the side average; `moment_upper` uses
+a loose price-compatible volume ceiling under an explicit one-GP mean uncertainty.
+Neither identifies queue priority or adverse selection. All three presets use
+passive prices for this experiment, with their original cost/time settings.
+
+The 810 development combinations include no-trade and zero participation.
+`break_even.csv` reports sampled profit ranges and the first profitable sampled
+share (requiring buys and sales); `sign_changes.csv` records all observed sign
+reversals, and `ranks.csv` preserves model ordering at every share. Thresholds are
+brackets, without interpolation or a monotonicity claim. Full ledgers and manifests
+remain outside Git. Every result is `current_limits_sensitivity`, not calibrated
+historical profitability. Audit completed output with:
+
+```bash
+uv run --project ml --frozen python -m osrs_ml.execution_audit \
+  /home/martin/osrs-data/participation-bounds-v3 \
+  /home/martin/osrs-data/assembled-v3/daily.parquet
+```
