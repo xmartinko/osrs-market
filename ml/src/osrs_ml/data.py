@@ -131,16 +131,31 @@ def load_snapshot(
     intervals = frame.source_interval_seconds
     if (intervals <= 0).any():
         raise ValueError("Nonpositive source interval")
-    if intervals.isna().any() and not allow_unknown_metadata:
+    if (
+        intervals.isna().any() or frame.get("interval_unknown", pd.Series(False)).any()
+    ) and not allow_unknown_metadata:
         raise ValueError("Unknown source intervals; explicit --allow-unknown-metadata required")
-    frame["available_at"] = frame.timestamp + intervals.fillna(unknown_interval_seconds)
-    frame["interval_unknown"] = intervals.isna()
+    if "available_at" not in frame:
+        frame["available_at"] = frame.timestamp + intervals.fillna(unknown_interval_seconds)
+    if "interval_unknown" not in frame:
+        frame["interval_unknown"] = intervals.isna()
+    if "resolution_seconds" in frame:
+        if (
+            frame.resolution_seconds.nunique() != 1
+            or frame.get("resolution_ambiguous", pd.Series(False)).any()
+        ):
+            raise ValueError("Select one strict, unambiguous resolution panel")
+        intervals = intervals.fillna(frame.resolution_seconds)
+        if (frame.available_at < frame.timestamp + intervals).any():
+            raise ValueError("Availability precedes bucket completion")
     frame["observed_gap_seconds"] = frame.groupby("item_id").timestamp.diff()
     previous_end = (frame.timestamp + intervals).groupby(frame.item_id).shift(1)
     if (frame.timestamp < previous_end).any():
         raise ValueError("Overlapping source buckets; qualify resolutions before evaluation")
     frame = frame.sort_values(["item_id", "available_at", "timestamp"]).reset_index(drop=True)
     for side in ("high", "low"):
+        if f"{side}_freshness_seconds" in frame:
+            continue
         traded = (frame[f"{side}_price_volume"] > 0) & frame[f"avg_{side}_price"].notna()
         last_bucket = frame.available_at.where(traded).groupby(frame.item_id).ffill()
         frame[f"{side}_freshness_seconds"] = frame.available_at - last_bucket

@@ -85,7 +85,7 @@ def simulate(
             uncertainty = (
                 int(row["source_interval_seconds"])
                 if present(row, "source_interval_seconds")
-                else assumptions.unknown_interval_seconds
+                else int(row.get("resolution_seconds", assumptions.unknown_interval_seconds))
             )
         return (
             present(row, f"avg_{side}_price")
@@ -144,7 +144,9 @@ def simulate(
                 continue
             capacity = (
                 int(row[f"{side}_price_volume"])
-                * assumptions.participation_bps * assumptions.queue_fill_bps // 100_000_000
+                * assumptions.participation_bps
+                * assumptions.queue_fill_bps
+                // 100_000_000
             )
             price = execution_price(
                 int(row[f"avg_{side}_price"]), assumptions.slippage_bps, buy=order.stage == "buy"
@@ -221,7 +223,8 @@ def simulate(
                 continue
             ceiling = execution_price(
                 int(row["avg_low_price"] if assumptions.passive_prices else row["avg_high_price"]),
-                assumptions.slippage_bps, buy=True
+                assumptions.slippage_bps,
+                buy=True,
             )
             budget = min(
                 cash - reserved(), portfolio.initial_cash_gp * portfolio.allocation_bps // 10_000

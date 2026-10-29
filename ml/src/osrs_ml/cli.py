@@ -10,6 +10,7 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
+from .assembly import assemble
 from .backtest import simulate
 from .data import export_postgres, load_snapshot, sha256
 from .evaluation import split_fold, walk_forward_folds
@@ -184,6 +185,9 @@ def run(args):
 def parser():
     value = argparse.ArgumentParser(description="OSRS execution-aware model research")
     commands = value.add_subparsers(dest="command", required=True)
+    assembly = commands.add_parser("assemble", help="Qualify real mixed-resolution exports")
+    assembly.add_argument("--data-dir", type=Path)
+    assembly.add_argument("--output", type=Path)
     fixture = commands.add_parser("fixture", help="Generate deterministic synthetic Parquet")
     fixture.add_argument("--output", required=True)
     snapshot = commands.add_parser(
@@ -219,7 +223,9 @@ def parser():
 
 def main():
     args = parser().parse_args()
-    if args.command == "fixture":
+    if args.command == "assemble":
+        print(json.dumps(assemble(args.data_dir, args.output), indent=2))
+    elif args.command == "fixture":
         print(json.dumps(write_fixture(Path(args.output)), indent=2))
     elif args.command == "snapshot":
         dsn = os.environ.get("DATABASE_URL")

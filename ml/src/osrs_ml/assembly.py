@@ -13,7 +13,7 @@ import pandas as pd
 
 from .data import manifest, sha256
 
-ASSEMBLY_VERSION = 2
+ASSEMBLY_VERSION = 3
 DAY = 86_400
 
 
@@ -23,7 +23,7 @@ def data_dir() -> Path:
 
 def assemble(root: Path | None = None, output: Path | None = None) -> dict:
     root = root or data_dir()
-    output = output or root / "assembled-v2"
+    output = output or root / "assembled-v3"
     output.mkdir(parents=True, exist_ok=False)
     prices, items = root / "prices.parquet", root / "items.parquet"
     export = json.loads((root / "EXPORT_METADATA.json").read_text())
@@ -36,8 +36,12 @@ def assemble(root: Path | None = None, output: Path | None = None) -> dict:
             SELECT min(ts) FILTER(WHERE ts % 86400 != 0),
                    min(ts) FILTER(WHERE ts % 3600 != 0) FROM raw
         """).fetchone()
-        db.execute("""CREATE TABLE qualified AS
-            SELECT r.* EXCLUDE(ts, name, members, buy_limit), ts::BIGINT AS timestamp,
+        if db.execute("SELECT count(*) != count(DISTINCT id) FROM mapping").fetchone()[0]:
+            raise ValueError("Duplicate mapping IDs")
+        db.execute(
+            """CREATE TABLE qualified AS
+            SELECT r.* EXCLUDE(ts, name, members, buy_limit, item_id),
+                   r.item_id::BIGINT AS item_id, ts::BIGINT AS timestamp,
                    r.buy_limit::BIGINT AS buy_limit_current,
                    m.name AS current_name, m.members AS current_members,
                    m.low_alch AS current_low_alch, m.high_alch AS current_high_alch,
@@ -48,64 +52,113 @@ def assemble(root: Path | None = None, output: Path | None = None) -> dict:
                    (avg_low_price > avg_high_price) IS TRUE AS inverted_spread,
                    ts - lag(ts) OVER(PARTITION BY item_id ORDER BY ts) AS observed_gap_seconds
             FROM raw r LEFT JOIN mapping m ON r.item_id=m.id
-        """, [fetched])
+        """,
+            [fetched],
+        )
         # Never resample overlapping bucket volumes by summing them.
         specs = {
             "daily_candidates": ("timestamp % 86400 = 0", DAY),
             "daily": (f"timestamp % 86400 = 0 AND timestamp < {hourly_start or 2**62}", DAY),
             "intraday_1h": (
                 f"timestamp >= {hourly_start or 2**62} AND timestamp < {fine_start or 2**62} "
-                "AND timestamp % 3600 = 0 AND timestamp % 86400 != 0", 3600
+                "AND timestamp % 3600 = 0 AND timestamp % 86400 != 0",
+                3600,
             ),
             "intraday_5m": (
                 f"timestamp >= {fine_start or 2**62} AND timestamp % 300 = 0 "
-                "AND timestamp % 3600 != 0", 300
+                "AND timestamp % 3600 != 0",
+                300,
             ),
         }
         panels = {}
         for name, (condition, seconds) in specs.items():
-            frame = db.execute(f"""
+            db.execute(f"""CREATE OR REPLACE VIEW panel AS
                 SELECT *, {seconds}::BIGINT AS resolution_seconds,
-                    {seconds}::BIGINT AS source_interval_seconds,
+                    NULL::BIGINT AS source_interval_seconds,
                     TRUE AS interval_unknown, 'timestamp_phase_inference' AS resolution_basis,
                     timestamp + {seconds} + 300 AS available_at,
                     timestamp >= {hourly_start or 2**62} AND timestamp % 86400=0
                         AS resolution_ambiguous,
                     NULL::BIGINT AS buy_limit,
-                    CASE WHEN high_price_volume>0 AND avg_high_price IS NOT NULL THEN 0 END
+                    CASE WHEN high_price_volume>0 AND avg_high_price IS NOT NULL THEN 300 END
                         AS high_freshness_seconds,
-                    CASE WHEN low_price_volume>0 AND avg_low_price IS NOT NULL THEN 0 END
+                    CASE WHEN low_price_volume>0 AND avg_low_price IS NOT NULL THEN 300 END
                         AS low_freshness_seconds
                 FROM qualified WHERE {condition} ORDER BY item_id, timestamp
-            """).fetchdf()
-            # A current limit is kept for an explicitly labelled sensitivity, never a feature.
-            frame.to_parquet(output / f"{name}.parquet", index=False)
-            coverage = frame.groupby("item_id").agg(
-                rows=("timestamp", "size"), first=("timestamp", "min"),
-                last=("timestamp", "max"), valid_sides=("avg_high_price", "count"),
-                inverted=("inverted_spread", "sum"),
+            """)
+            # SQL/Arrow keep nullable integers exact and avoid a huge object dataframe.
+            path = output / f"{name}.parquet"
+            db.execute("COPY panel TO ? (FORMAT PARQUET, COMPRESSION ZSTD)", [str(path)])
+            db.execute(f"""CREATE OR REPLACE VIEW coverage AS
+                SELECT item_id, count(*) AS rows, min(timestamp) AS first,
+                    max(timestamp) AS last, count(avg_high_price) AS valid_high_rows,
+                    count(avg_low_price) AS valid_low_rows, sum(inverted_spread::INT) AS inverted,
+                    count(*) FILTER(WHERE avg_high_price IS NOT NULL
+                        AND avg_low_price IS NOT NULL AND NOT inverted_spread) AS usable_rows,
+                    count(DISTINCT timestamp // {DAY}) AS days_covered,
+                    (max(timestamp)-min(timestamp)) // {seconds} + 1 AS span_expected_buckets,
+                    span_expected_buckets - count(*) AS missing_buckets
+                FROM panel GROUP BY item_id""")
+            db.execute(
+                "COPY coverage TO ? (FORMAT PARQUET)", [str(output / f"{name}_coverage.parquet")]
             )
-            both = frame.avg_high_price.notna() & frame.avg_low_price.notna() & ~frame.inverted_spread
-            coverage["usable_rows"] = frame[both].groupby("item_id").size()
-            coverage["usable_rows"] = coverage.usable_rows.fillna(0).astype(int)
-            coverage["days_covered"] = frame.assign(day=frame.timestamp // DAY).groupby("item_id").day.nunique()
-            coverage["span_expected_buckets"] = (coverage["last"] - coverage["first"]) // seconds + 1
-            coverage["missing_buckets"] = coverage.span_expected_buckets - coverage.rows
-            coverage.to_parquet(output / f"{name}_coverage.parquet")
-            info = manifest(output / f"{name}.parquet", source="wiki", rows=len(frame),
-                            assembly_version=ASSEMBLY_VERSION, resolution_seconds=seconds,
-                            interval_status="inferred, not recovered", availability_delay_seconds=300)
-            panels[name] = {
-                "rows": len(frame), "items": int(frame.item_id.nunique()),
-                "days": int((frame.timestamp // DAY).nunique()),
-                "usable_rows": int(both.sum()), "inverted_spreads": int(frame.inverted_spread.sum()),
-                "items_ge_300_days": int((coverage.days_covered >= 300).sum()),
-                "items_ge_300_usable_rows": int((coverage.usable_rows >= 300).sum()),
-                "missing_buckets_within_lifetimes": int(coverage.missing_buckets.sum()),
-                "sha256": info["sha256"],
-                "min_timestamp": int(frame.timestamp.min()) if len(frame) else None,
-                "max_timestamp": int(frame.timestamp.max()) if len(frame) else None,
-            }
+            stats = db.execute("""SELECT count(*), count(DISTINCT item_id),
+                count(DISTINCT timestamp // 86400),
+                count(*) FILTER(WHERE avg_high_price IS NOT NULL AND avg_low_price IS NOT NULL
+                    AND NOT inverted_spread), coalesce(sum(inverted_spread::INT),0),
+                min(timestamp), max(timestamp),
+                avg((avg_high_price IS NULL)::INT), avg((avg_low_price IS NULL)::INT),
+                avg((mid_price IS NULL)::INT), avg((buy_limit_current IS NULL)::INT)
+                FROM panel""").fetchone()
+            cov = db.execute("""SELECT count(*) FILTER(WHERE days_covered>=300),
+                count(*) FILTER(WHERE usable_rows>=300), coalesce(sum(missing_buckets),0)
+                FROM coverage""").fetchone()
+            info = manifest(
+                path,
+                source="wiki",
+                rows=stats[0],
+                assembly_version=ASSEMBLY_VERSION,
+                panel=name,
+                resolution_seconds=seconds,
+                interval_status="inferred, not recovered",
+                availability_delay_seconds=300,
+            )
+            panels[name] = dict(
+                zip(
+                    [
+                        "rows",
+                        "items",
+                        "days",
+                        "usable_rows",
+                        "inverted_spreads",
+                        "min_timestamp",
+                        "max_timestamp",
+                    ],
+                    stats[:7],
+                    strict=True,
+                )
+            )
+            panels[name].update(
+                dict(
+                    zip(
+                        [
+                            "items_ge_300_days",
+                            "items_ge_300_usable_rows",
+                            "missing_buckets_within_lifetimes",
+                        ],
+                        cov,
+                        strict=True,
+                    )
+                )
+            )
+            panels[name]["null_rates"] = dict(
+                zip(
+                    ["avg_high_price", "avg_low_price", "mid_price", "buy_limit"],
+                    stats[7:],
+                    strict=True,
+                )
+            )
+            panels[name]["sha256"] = info["sha256"]
         nulls = db.execute("""SELECT
             avg((avg_high_price IS NULL)::INT), avg((avg_low_price IS NULL)::INT),
             avg((mid_price IS NULL)::INT), avg((buy_limit_current IS NULL)::INT)
@@ -115,11 +168,22 @@ def assemble(root: Path | None = None, output: Path | None = None) -> dict:
         gaps.to_csv(output / "gap_counts.csv", index=False)
         report = {
             "assembly_version": ASSEMBLY_VERSION,
-            "source_sha256": sha256(prices), "items_sha256": sha256(items),
+            "export_metadata": export,
+            "source_sha256": sha256(prices),
+            "items_sha256": sha256(items),
             "export_metadata_sha256": sha256(root / "EXPORT_METADATA.json"),
-            "hourly_start": hourly_start, "fine_start": fine_start,
-            "null_rates": dict(zip(["avg_high_price", "avg_low_price", "mid_price", "buy_limit"], nulls, strict=True)),
-            "jitter_gaps": int(gaps.loc[~gaps.observed_gap_seconds.isin([300, 3600, DAY]), "rows"].sum()),
+            "hourly_start": hourly_start,
+            "fine_start": fine_start,
+            "null_rates": dict(
+                zip(
+                    ["avg_high_price", "avg_low_price", "mid_price", "buy_limit"],
+                    nulls,
+                    strict=True,
+                )
+            ),
+            "jitter_gaps": int(
+                gaps.loc[~gaps.observed_gap_seconds.isin([300, 3600, DAY]), "rows"].sum()
+            ),
             "panels": panels,
             "limitations": [
                 "Daily candidates are midnight observations, not verified daily source buckets.",
