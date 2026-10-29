@@ -277,3 +277,73 @@ horizons, and seven development eras on matched item sets. There are 112 tests,
 tests a measurement explanation, not expected profit; prior account failures and
 the own-fill gate stand. No new trading rule, holdout read, synthetic profit
 evidence or C++ change. Outcomes and executed checks will be appended later.
+
+### Completion appended — midpoint reversal persists; account-profit verdict unchanged
+
+Registration `5aa7195` and implementation/tests `0ef050d` preceded execution.
+The [full validation](reversal-field-audit-validation.md) reports every one of the
+112 era/cell tests, including six corrected failures. External artifacts remain
+in `/home/martin/osrs-data/reversal-field-audit-v1`: 5,208 weekly score rows,
+112 summaries and 224 block tests. All 112 have complete calendar correlations
+and meet the frozen coverage gate. The sealed source has 1,803,631 rows, maximum
+availability 1784765100 < 1785024300; every cross-section has >=2,446 matched items.
+
+**Numbers:** all **28/28 midpoint-signal/midpoint-label** tests pass the finite
+112-test correction, across both lag lengths, both horizons and all seven eras.
+Annual mean rank correlations for lag/horizon 1w/1w, 1w/4w, 4w/1w and 4w/4w
+are respectively **0.111051–0.171149, 0.167814–0.227355, 0.174860–0.236495 and
+0.216212–0.301565**. Their smallest ordinary lower bounds across eras/blocks
+are 0.089524, 0.140073, 0.149073 and 0.167058. Each has worse-block raw
+**p=1/20001=0.0000499975001**, adjusted **p=112/20001=0.005599720014**.
+These are Monte Carlo floor p-values, not more precise tail estimates. The
+familywise raw threshold is .05/112=0.000446428571; all-null expected pointwise
+5% false positives are 5.6. No Gaussian statistics were used.
+
+Across all cells there are **106/112 diagnostic passes**. The six failures all
+use midpoint signal / overallPrice label, one-week lag / one-week horizon:
+2020/2021/2023/2024/2025/development-2026 adjusted p=0.722364/0.358382/1/1/1/1.
+Only 2022 passes in that cell; it has no all-era consistency claim. Other cells
+pass all seven eras. Positive pointwise bounds in 2020/2021 do not rescue their
+failures. No row, outlier, inversion or failed era was removed or retuned.
+
+**Learned / ruled out:** reversal is not confined to anomalous overallPrice
+observations; the midpoint of side averages also carries a repeatable rank
+relationship on these matched development samples. This does not rule out
+aggregate measurement error, spread bounce, stale observations or selection.
+Signal and label still share the current endpoint. No account was simulated,
+no GP expectation was estimated and no capacity/participation claim is added.
+The original battery remains **zero corrected profit survivors**; original
+processing adjusted p=1 and the actual-fill measurement gate remain unchanged.
+
+**Next lead:** genuine processing own-fill observations remain the direct
+economic gate. Without actual records, the next distinct development question
+is a separately registered, fixed-gap reversal diagnostic whose future-return
+label begins after an intervening complete week and shares no signal endpoint.
+This could distinguish persistent structure from immediate measurement reversal;
+it must not be turned into a tuned rescue of the failed patient accounts.
+
+The 30 new test cases initially failed because the implementation module did
+not exist; all original 191 plus the new 30 now pass. Full machine output from
+`ml/` before the outcome run:
+
+```text
+221 passed in 33.69s
+All checks passed!
+```
+
+Independent post-run checking rehashed all provenance and outputs, recomputed
+each bootstrap result, checked every era boundary/family member, and reconstructed
+16 field correlations through separate SQL endpoint joins:
+
+```text
+COMPLETE: 112/112 tests; 224 block tests; corrected diagnostic passes=106; holdout NOT read
+PASS: 112 family rows, 224 block tests and 5208 weekly rows; all inference and output hashes reconciled
+PASS: 16 independent SQL field correlations match; all development label boundaries verified
+PASS: 28/28 midpoint tests; 106/112 total corrected passes; 6 corrected failures retained; holdout_read=False
+```
+
+Summary SHA-256:
+`733e749e4293d3047622a919507a983689df904d4e493fe8b07fe241d585f494`.
+The holdout stayed sealed. No training, synthetic market/profit data, actual-order
+submission or C++ change occurred. The correction covers this finite diagnostic,
+not the prior research search; persistence is not confirmation of deployable alpha.

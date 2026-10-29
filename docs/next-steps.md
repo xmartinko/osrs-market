@@ -309,3 +309,21 @@ mechanism. Do not repeat intake construction or interpret enrollment as a positi
 result. The original battery adjusted p=1 remains unchanged. Accounting/coverage
 readiness alone cannot demonstrate positive expected profit; a later prospective
 economic trial requires separately frozen policy and search-adjusted inference.
+
+## After reversal field consistency audit, 2026-10-29 — cycle 4
+
+The [preregistered matched-field audit](reversal-field-audit-validation.md)
+finds reversal in side-midpoint prices too: **28/28 midpoint tests** pass across
+seven development eras and four lag/horizon pairs, each raw p=1/20001 and
+112-test-adjusted p=0.005599720014. Mean annual correlations span 0.111051–0.301565.
+There are 106/112 diagnostic passes overall and six corrected failures, all
+midpoint signal / overallPrice label at one-week lag and horizon outside 2022.
+No outcome was retuned; no holdout was read. All 221 tests pass.
+
+This rules out a source explanation confined to overallPrice. It does not identify
+executable profit: aggregate error, stale observations and the shared current
+signal/label endpoint remain. The original battery still has zero corrected
+profit survivors. The direct economic priority remains actual processing fills.
+If those records remain unavailable, separately pre-register a fixed-gap reversal
+diagnostic with disjoint signal/label endpoints before any further historical
+strategy search. Do not treat this rank finding as a patient-account rescue.
