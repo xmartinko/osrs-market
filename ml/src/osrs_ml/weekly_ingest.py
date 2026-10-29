@@ -2,6 +2,7 @@
 
 import argparse
 import fcntl
+import http.client
 import json
 import os
 import time
@@ -99,7 +100,7 @@ class Archive:
                         retry_after = max(0, parsedate_to_datetime(header).timestamp() - time.time())
                     except (ValueError, TypeError, OverflowError):
                         pass
-            except (OSError, TimeoutError) as error:
+            except (OSError, http.client.HTTPException) as error:
                 record.update(status="error", error=str(error), retryable=True)
             except ValueError as error:
                 record.update(status="error", error=str(error), retryable=False)

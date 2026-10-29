@@ -215,3 +215,22 @@ def test_http_200_provider_error_is_preserved_as_unknown_history_without_retry(t
         pytest.fail("HTTP 200 application errors are not retryable under the frozen policy")
     monkeypatch.setattr(module.urllib.request, "urlopen", forbidden)
     assert Archive(tmp_path).fetch("graph-2", bad["source_url"]) == bad
+
+
+
+def test_truncated_http_body_is_retried_as_connection_failure(tmp_path, monkeypatch):
+    import http.client
+    import io
+
+    from osrs_ml import weekly_ingest as module
+
+    calls, sleeps = [], []
+    def truncated(*a, **k):
+        calls.append(1)
+        if len(calls) == 1:
+            raise http.client.IncompleteRead(b"partial", 100)
+        return io.BytesIO(b'{"data": []}')
+    monkeypatch.setattr(module.urllib.request, "urlopen", truncated)
+    monkeypatch.setattr(module.time, "sleep", sleeps.append)
+    assert Archive(tmp_path).fetch("truncated", "https://example.org")["status"] == "ok"
+    assert sleeps == [1.] and len(calls) == 2
