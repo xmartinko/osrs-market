@@ -118,7 +118,10 @@ def weekly_scores(test, predicted):
                              top_excess_tax=float(chosen.target_tax.mean() - part.target_tax.mean()),
                              top_return_tax=float(chosen.target_tax.mean()),
                              universe_return_tax=float(part.target_tax.mean())))
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=[
+        "timestamp", "rule", "items", "top_items", "rank_correlation", "top_excess",
+        "top_excess_tax", "top_return_tax", "universe_return_tax",
+    ])
 
 
 def weekly_interval(values, indices):
@@ -149,9 +152,13 @@ def summarize_era(scores, year, horizon, grid):
 def normality_diagnostics(f, output):
     train = f[(f.timestamp >= epoch(2017)) & (f.available_at < epoch(2020))]
     cuts = train.volume.dropna().quantile([1 / 3, 2 / 3]).to_numpy()
-    atomic_json(output / "liquidity-bands.json", dict(training_years=[2017, 2019], cuts=cuts.tolist()))
+    identified = bool(np.isfinite(cuts).all() and len(np.unique(cuts)) == 2)
+    atomic_json(output / "liquidity-bands.json", dict(
+        training_years=[2017, 2019], identified=identified,
+        cuts=[float(c) if np.isfinite(c) else None for c in cuts],
+        reason="train_only_terciles" if identified else "insufficient_or_tied_training_volumes"))
     f = f.copy()
-    f["band"] = np.searchsorted(cuts, f.volume.to_numpy())
+    f["band"] = np.searchsorted(cuts, f.volume.to_numpy()) if identified else -1
     f.loc[f.volume.isna(), "band"] = -1
     grid = np.arange(f.timestamp.min(), f.timestamp.max() + WEEK, WEEK)
     rows, bands = [], []
@@ -272,8 +279,6 @@ def run(source, output, acknowledged):
                             labeled.target.notna()]
             test = labeled[(labeled.available_at >= start) & (labeled.available_at < end) &
                            (labeled.label_end < end) & labeled.target.notna()]
-            if train.empty or test.empty:
-                raise ValueError(f"No training/test observations for {year}/{horizon}")
             score_path = output / f"weekly-scores-{year}-h{horizon}.parquet"
             model_path = output / f"fit-{year}-h{horizon}.json"
             if model_path.exists():
@@ -282,10 +287,19 @@ def run(source, output, acknowledged):
                     raise ValueError("Cached weekly scores checksum mismatch")
                 scores = pd.read_parquet(score_path)
             else:
-                predicted, model = fit_rank(train, test)
+                identified = bool(not train.empty and np.isfinite(matrix(train)).any(axis=0).all())
+                if identified and not test.empty:
+                    predicted, model = fit_rank(train, test)
+                    model["identified"] = True
+                else:
+                    predicted = np.full(len(test), np.nan)
+                    model = dict(identified=False, features=list(FEATURES),
+                                 reason="insufficient_training_or_test_observations")
                 model.update(year=year, horizon_weeks=horizon, train_rows=len(train), test_rows=len(test),
-                             max_train_label_end=int(train.label_end.max()), test_start=start,
-                             max_test_label_end=int(test.label_end.max()), test_end=end)
+                             max_train_label_end=int(train.label_end.max()) if len(train) else None,
+                             test_start=start,
+                             max_test_label_end=int(test.label_end.max()) if len(test) else None,
+                             test_end=end)
                 scores = weekly_scores(test, predicted)
                 temporary = score_path.with_suffix(".partial.parquet")
                 scores.to_parquet(temporary, index=False)
@@ -293,7 +307,14 @@ def run(source, output, acknowledged):
                 model["scores_sha256"] = sha256(score_path)
                 atomic_json(model_path, model)
             manifest["models"].append(model)
-            grid = np.arange(test.timestamp.min(), test.timestamp.max() + WEEK, WEEK)
+            era_dates = labeled.loc[(labeled.available_at >= start) &
+                                    (labeled.available_at < end) & (labeled.label_end < end), "timestamp"]
+            if era_dates.empty:
+                offset = int(f.timestamp.iloc[0]) % WEEK
+                first = ((start - WEEK - 300 - offset) // WEEK + 1) * WEEK + offset
+                grid = np.arange(first, max(first + WEEK, end - (horizon + 1) * WEEK - 300), WEEK)
+            else:
+                grid = np.arange(era_dates.min(), era_dates.max() + WEEK, WEEK)
             summaries.extend(summarize_era(scores, year, horizon, grid))
             pd.DataFrame(summaries).to_csv(output / "era-intervals.csv", index=False)
             atomic_json(output / "run.json", manifest)

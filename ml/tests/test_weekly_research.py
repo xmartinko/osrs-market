@@ -79,3 +79,14 @@ def test_ties_and_missing_rule_eras_are_preserved_as_inconclusive():
     assert set(result.rule) == set(RULES)
     assert not result.adequate.any()
     assert result[result.rule == "momentum_4w"].weeks.eq(0).all()
+
+
+def test_completely_unobserved_era_is_inconclusive_for_every_rule():
+    empty = pd.DataFrame(columns=["timestamp", "target", "target_tax", "return_1w",
+                                  "return_4w", "spread_fraction", "log_volume"])
+    scores = weekly_scores(empty, np.array([]))
+    summary = pd.DataFrame(summarize_era(scores, 2020, 4, np.arange(48) * WEEK))
+    assert len(summary) == len(RULES) * 2 * 5
+    assert summary.weeks.eq(0).all()
+    assert not summary.adequate.any()
+    assert summary.lower.isna().all()
