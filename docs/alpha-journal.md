@@ -206,3 +206,58 @@ report missing observations honestly. The fixed 56-day calibration is descriptiv
 it adds no alpha significance test and cannot rescue original adjusted p=1.
 No synthetic data will enter that study; accounting test fixtures remain tests only.
 Completion, executed verification and next lead will be appended below.
+
+### Completion appended — actual-fill intake ready, actual evidence still absent
+
+Registration committed in `1366d26`, durable intake/tests in `84bd183`, and actual
+execution measurements/documentation in `fdde48d`. The [executed validation](processing-own-fill-validation.md)
+records the machine output and limits. Built offline immutable SQLite intake for
+operator decisions, submitted/rejected/cancelled orders, partial fills with actual
+tax, owned-input production and daily cash/inventory/active-time checks. It
+reconstructs weighted books, realized P&L, remaining inventory and capital-time
+occupancy. Evidence integrity, duplicate identities, impossible accounting and
+changed protocol/code fail closed. Envelope violations remain visible and block
+readiness; they are not discarded to improve results. Late-recorded decisions
+cannot count as durable pre-submission selection.
+
+**Numbers:** enrolled `/home/martin/osrs-data/processing-own-fill-v1` at
+2026-10-29 20:22:41 UTC. Its fixed 56-day window is 2026-10-30 through
+2026-12-25 00:00 UTC, end exclusive. **0 actual events, 0 decisions, 0 sessions,
+0 fills, 0 completed batches**. Status `awaiting_actual_records`, `ready=false`;
+expected profit and new adjusted p are null/unidentified. The configured 10M GP
+is an accounting allocation, not observed deployed funds. No import, order or
+market-price read occurred. Historical processing raw/adjusted **p=1.0** remains
+unchanged; no additional alpha test or Gaussian statistic was performed.
+
+**Learned / ruled out:** a reproducible ledger now exists to measure attainable
+conversion margins without dropping failed/partial attempts or equating residual
+inventory marks with profit. Software readiness supplies no economic evidence.
+The empty sample rules out any claim that this cycle independently confirmed
+processing profit. Evidence hashes cannot authenticate supplied records, enforce
+unrecorded activity coverage or prove causal recipe selection. The passing
+readiness gate is accounting/coverage qualification only, not an edge verdict.
+
+**Next lead:** genuine own-fill calibration of the unchanged two-recipe processing
+mechanism. Import decisions before submissions and retain both legs, failed
+orders, leftovers, actual output tax and all interaction time. Do not rebuild the
+same intake or rerun failed rules as new evidence. If no actual records can be
+obtained, expected executable processing profit remains unidentified; any distinct
+development-only research hypothesis must be registered separately. A later
+prospective profit trial must freeze its economic endpoint, sample adequacy,
+empirical block-bootstrap and search-family correction before outcomes.
+
+All 29 new intake/accounting test cases plus the original 162 tests pass. Tests
+initially failed because the implementation module did not exist. Fixtures are
+accounting examples only and were never imported into the external actual study.
+Executed from `ml/`:
+
+```text
+191 passed in 32.62s
+All checks passed!
+PASS: frozen protocol/code hashes; 0 actual events; 56-day window; expected profit unidentified; holdout_read=False
+```
+
+Initial readiness report SHA-256:
+`48c1cfc4cab6cfee3e31e15504b40435a01ff3c0baee63d75f2477d8dcf9451c`.
+The reserved holdout remained sealed; no archive market rows, forward aggregate
+prices, training, synthetic profit evidence or C++ changes were used.

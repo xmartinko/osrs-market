@@ -293,3 +293,19 @@ including both input legs, failed submissions, output tax, active time and
 inventory exposure. The unchanged 1% and 5% paths give no reason to expect a
 larger participation assumption alone to solve the measurement problem. Keep the
 reserved holdout sealed; the historical audit supplies no actual execution data.
+
+## After actual-fill intake registration, 2026-10-29 — cycle 3
+
+The [frozen processing calibration](processing-own-fill-protocol.md) and
+[executed intake validation](processing-own-fill-validation.md) now provide an
+offline append-only ledger for actual decisions, failed/partial orders, production,
+actual sale tax, active time and daily account checks. The external study's fixed
+56-day window is 2026-10-30 to 2026-12-25 UTC. It contains **zero actual events**
+and reports `awaiting_actual_records`; expected profit remains unidentified.
+191 tests pass. No order was placed and no market archive or holdout was opened.
+
+The next empirical gate is genuine own-fill evidence for the original processing
+mechanism. Do not repeat intake construction or interpret enrollment as a positive
+result. The original battery adjusted p=1 remains unchanged. Accounting/coverage
+readiness alone cannot demonstrate positive expected profit; a later prospective
+economic trial requires separately frozen policy and search-adjusted inference.
