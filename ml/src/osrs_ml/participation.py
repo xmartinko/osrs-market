@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 import pyarrow.parquet as pq
 
-from .backtest import simulate
+from .backtest import PreparedObservations, simulate
 from .cli import git_metadata
 from .data import sha256
 from .diagnostics import BASELINES, DAY, MODELS, atomic_json, scenarios, validate_fold
@@ -160,6 +160,7 @@ def run(panel: Path, development_run: Path, output: Path, config_path: Path):
             predictions = pd.read_parquet(development_run / f"fold{i}/forecast/predictions.parquet")
             validate_fold(observations, predictions, fold, metadata["holdout_start"])
             observations["buy_limit"] = observations.buy_limit_current
+            market = PreparedObservations(observations)
             scores = {
                 model: dict(
                     zip(
@@ -176,7 +177,7 @@ def run(panel: Path, development_run: Path, output: Path, config_path: Path):
             }
             for name, assumptions in assumptions_grid.items():
                 for model in MODELS:
-                    result = simulate(observations, scores[model], assumptions, portfolio)
+                    result = simulate(market, scores[model], assumptions, portfolio)
                     path = output / f"fold{i}" / name / model
                     pending = path.with_name(model + ".partial")
                     pending.mkdir(parents=True)

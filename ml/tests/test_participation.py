@@ -293,3 +293,19 @@ def test_failed_replay_keeps_completed_results_and_failure_manifest(frozen_run, 
     assert manifest["completed_scenarios"] == 1
     assert (output / "fold0/mean_proxy/optimistic/p00000/no_trade/metrics.json").exists()
     assert not (output / "results.parquet").exists()
+
+
+def test_prepared_observations_preserve_results_and_snapshot_input():
+    from osrs_ml.backtest import PreparedObservations
+
+    frame = market()
+    prepared = PreparedObservations(frame)
+    expected = simulate(frame, {(1, 300): 1.0}, BOUNDED, PORTFOLIO)
+    assert simulate(prepared, {(1, 300): 1.0}, BOUNDED, PORTFOLIO) == expected
+    frame["avg_low_price"] = 1000000
+    assert simulate(prepared, {(1, 300): 1.0}, BOUNDED, PORTFOLIO) == expected
+    for share in (0, 10, 10000):
+        policy = replace(BOUNDED, participation_bps=share)
+        assert simulate(prepared, {(1, 300): 1.0}, policy, PORTFOLIO) == simulate(
+            prepared.frame, {(1, 300): 1.0}, policy, PORTFOLIO
+        )

@@ -50,6 +50,22 @@ class BacktestResult:
     equity: list[dict]
 
 
+class PreparedObservations:
+    """Snapshot and convert a development frame once for repeated policy replays.
+
+    Internal records are read-only by convention. The source frame can subsequently
+    change without changing this snapshot. This cache contains no scores or outcomes
+    beyond the explicitly provided observations.
+    """
+
+    def __init__(self, observations: pd.DataFrame):
+        self.frame = observations.copy(deep=True)
+        self.buckets = [
+            (int(now), {int(row["item_id"]): row for row in group.to_dict("records")})
+            for now, group in self.frame.groupby("available_at", sort=True)
+        ]
+
+
 def present(row: dict, name: str) -> bool:
     return name in row and not pd.isna(row[name])
 
@@ -68,12 +84,15 @@ def compatible_volume(volume: int, mean: int, threshold: int, *, buy: bool, rule
 
 
 def simulate(
-    observations: pd.DataFrame,
+    observations: pd.DataFrame | PreparedObservations,
     scores: dict[tuple[int, int], float],
     assumptions: ExecutionAssumptions,
     portfolio: PortfolioPolicy = DEFAULT_PORTFOLIO,
     tax: TaxPolicy = DEFAULT_TAX,
 ) -> BacktestResult:
+    prepared = observations if isinstance(observations, PreparedObservations) else None
+    if prepared is not None:
+        observations = prepared.frame
     if observations.empty:
         raise ValueError("Backtest needs observations")
     if observations.duplicated(["item_id", "available_at"]).any():
@@ -148,9 +167,16 @@ def simulate(
     if end <= start:
         raise ValueError("Backtest requires positive elapsed time")
 
-    for timestamp, group in observations.groupby("available_at", sort=True):
+    buckets = (
+        observations.groupby("available_at", sort=True) if prepared is None else prepared.buckets
+    )
+    for timestamp, group in buckets:
         now = int(timestamp)
-        rows = {int(row["item_id"]): row for row in group.to_dict("records")}
+        rows = (
+            {int(row["item_id"]): row for row in group.to_dict("records")}
+            if prepared is None
+            else group
+        )
         latest.update(rows)
         # Timeout uses elapsed wall time, even when an item has no new observations.
         for item, order in list(active.items()):
