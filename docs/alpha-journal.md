@@ -105,3 +105,20 @@ Final executed aggregate consistency check:
 ```text
 PASS: 213 aggregate rows match frozen results; 156 annual sums reproduce net GP; all 71 rules reported; zero corrected survivors; holdout_read=False
 ```
+
+## 2026-10-29 — cycle 2, processing attribution registered before batch inspection
+
+Starting revision: `9b6c549`. Read the five requested records in order. The completed
+battery and prior patient/null results are retained; rerunning those rules would
+not add evidence. Highest-value next work is the processing measurement lead:
+reconstruct every submitted/produced/sold batch and remaining input at all three
+original participation shares. The [frozen attribution protocol](processing-attribution-protocol.md)
+defines cost allocation, decision-margin/input-movement/output-movement identities,
+source predicates, integrity checks and the descriptive-only interpretation before
+opening detailed outcomes. Existing raw/adjusted p-values remain unchanged.
+
+The audit will distinguish cash change, realized production P&L and **mark less
+remaining book cost**. Gross terminal inventory value alone does not measure the
+contribution of appreciation to net profit. No new strategy or parameter search,
+holdout access, synthetic profit evidence or C++ change is authorized by this audit.
+Completion and executed verification will be appended below.
