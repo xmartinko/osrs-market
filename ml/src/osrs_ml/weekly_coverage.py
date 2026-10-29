@@ -49,7 +49,7 @@ def run(source, output, acknowledged):
     pd.DataFrame(starts).to_csv(output / "items-by-first-year.csv", index=False)
     grid = np.arange(panel.timestamp.min(), panel.timestamp.max() + WEEK, WEEK)
     valid = (panel[["overallPrice", "buyingPrice", "sellingPrice", "buyingCompleted",
-                    "sellingCompleted"]] > 0).all(axis=1)
+                    "sellingCompleted"]] > 0).fillna(False).all(axis=1)
     annual = []
     grid_years = pd.to_datetime(grid, unit="s", utc=True).year
     years = pd.to_datetime(panel.timestamp, unit="s", utc=True).dt.year

@@ -4,7 +4,10 @@ The full-universe archive is collecting with eight concurrent workers, cached
 responses and resumable exponential backoff. The previous artificial two-second
 request interval has been removed. Actual collection encountered HTTP 429 with
 server `Retry-After` values of 171 and 288 seconds. These are measured operational
-backoffs, not a restriction invented from the terms. The frozen cached catalogue
+backoffs, not a restriction invented from the terms. Subsequent 429 response headers
+explicitly reported `X-RateLimit-Limit: 200`, `X-RateLimit-Remaining: 0`,
+`Retry-After: 275` and a reset timestamp, consistent with approximately 200 requests
+per five-minute window in this run. The frozen cached catalogue
 contains **4,586 identifiers**, rather than the 4,523 in the preliminary estimate.
 Archive coverage and cross-era conclusions remain pending until the sweep completes;
 no partial item sample is being used to select a rule.
