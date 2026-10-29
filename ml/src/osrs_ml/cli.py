@@ -204,6 +204,14 @@ def parser():
     research.add_argument("--output", required=True, type=Path)
     research.add_argument("--config", type=Path, default=Path("ml/experiments/daily-v1.json"))
     research.add_argument("--holdout", action="store_true")
+    diagnostic = commands.add_parser(
+        "diagnose-execution",
+        help="Replay frozen development scores with controlled execution ablations",
+    )
+    diagnostic.add_argument("--panel", required=True, type=Path)
+    diagnostic.add_argument("--development-run", required=True, type=Path)
+    diagnostic.add_argument("--output", required=True, type=Path)
+    diagnostic.add_argument("--config", type=Path, default=Path("ml/experiments/daily-v1.json"))
     assembly = commands.add_parser("assemble", help="Qualify real mixed-resolution exports")
     assembly.add_argument("--data-dir", type=Path)
     assembly.add_argument("--output", type=Path)
@@ -270,6 +278,10 @@ def main():
         from .research import experiment
 
         experiment(args.panel, args.output, args.config, holdout=args.holdout)
+    elif args.command == "diagnose-execution":
+        from .diagnostics import diagnose
+
+        diagnose(args.panel, args.development_run, args.output, args.config)
     elif args.command == "assemble":
         print(json.dumps(assemble(args.data_dir, args.output), indent=2))
     elif args.command == "fixture":
