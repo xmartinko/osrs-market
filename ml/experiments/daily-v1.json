@@ -5,18 +5,54 @@
   "fold_days": 28,
   "folds": 3,
   "seed": 42,
-  "catboost": {"iterations": 100, "depth": 6, "learning_rate": 0.06, "thread_count": 2},
+  "catboost": {
+    "iterations": 100,
+    "depth": 6,
+    "learning_rate": 0.06,
+    "thread_count": 2
+  },
   "cash_gp": 10000000,
   "offer_slots": 8,
   "allocation_bps": 1000,
   "execution": {
-    "optimistic": {"passive_prices": true, "participation_bps": 1000, "queue_fill_bps": 10000, "slippage_bps": 0, "latency_seconds": 0, "freshness_basis": "lower_bound", "max_freshness_seconds": 86700, "buy_timeout_seconds": 345600, "terminal_haircut_bps": 0},
-    "moderate": {"passive_prices": false, "participation_bps": 200, "queue_fill_bps": 5000, "slippage_bps": 10, "latency_seconds": 300, "freshness_basis": "upper_bound", "max_freshness_seconds": 86700, "buy_timeout_seconds": 345600, "terminal_haircut_bps": 100},
-    "conservative": {"passive_prices": false, "participation_bps": 50, "queue_fill_bps": 2500, "slippage_bps": 30, "latency_seconds": 600, "freshness_basis": "upper_bound", "max_freshness_seconds": 86700, "buy_timeout_seconds": 345600, "terminal_haircut_bps": 300}
+    "optimistic": {
+      "passive_prices": true,
+      "participation_bps": 1000,
+      "queue_fill_bps": 10000,
+      "slippage_bps": 0,
+      "latency_seconds": 0,
+      "freshness_basis": "lower_bound",
+      "max_freshness_seconds": 86700,
+      "buy_timeout_seconds": 345600,
+      "terminal_haircut_bps": 0
+    },
+    "moderate": {
+      "passive_prices": false,
+      "participation_bps": 200,
+      "queue_fill_bps": 5000,
+      "slippage_bps": 10,
+      "latency_seconds": 300,
+      "freshness_basis": "upper_bound",
+      "max_freshness_seconds": 86700,
+      "buy_timeout_seconds": 345600,
+      "terminal_haircut_bps": 100
+    },
+    "conservative": {
+      "passive_prices": false,
+      "participation_bps": 50,
+      "queue_fill_bps": 2500,
+      "slippage_bps": 30,
+      "latency_seconds": 600,
+      "freshness_basis": "upper_bound",
+      "max_freshness_seconds": 86700,
+      "buy_timeout_seconds": 345600,
+      "terminal_haircut_bps": 300
+    }
   },
   "selection": "Highest aggregate moderate net gp/hour on development current-limit sensitivity, including no_trade; ties prefer no_trade. Freeze before opening holdout. All candidates reported once on holdout.",
   "limits": "Run unknown_limits_strict and current_limits_sensitivity. Current buy limits are never features.",
   "availability": "Inferred bucket start + 86400 + 300 seconds; fills only consume buckets starting after order submission plus latency.",
   "ranking": "CatBoost predicts per-unit net gp/hour; raw_spread and spread_volume rank literal after-tax gp spread and gp spread times side volume. No-change uses current instant-side prices.",
-  "tax": "2 percent floored per item, 5M cap, exactly 50 pays 1gp; no inferred item exemptions (conservative for exempt items)."
+  "tax": "2 percent floored per item, 5M cap, exactly 50 pays 1gp; no inferred item exemptions (conservative for exempt items).",
+  "catboost_target": "Train-only 0.5/99.5 percentile clipped 24h net return; score predicted return times entry gp /24. Separate 10/50/90 MultiQuantile fit, same parameters. Errors on unclipped outcomes. Require 14 past observations, no survivor filter."
 }

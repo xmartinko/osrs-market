@@ -185,6 +185,11 @@ def run(args):
 def parser():
     value = argparse.ArgumentParser(description="OSRS execution-aware model research")
     commands = value.add_subparsers(dest="command", required=True)
+    research = commands.add_parser("research", help="Frozen real daily walk-forward / holdout")
+    research.add_argument("--panel", required=True, type=Path)
+    research.add_argument("--output", required=True, type=Path)
+    research.add_argument("--config", type=Path, default=Path("ml/experiments/daily-v1.json"))
+    research.add_argument("--holdout", action="store_true")
     assembly = commands.add_parser("assemble", help="Qualify real mixed-resolution exports")
     assembly.add_argument("--data-dir", type=Path)
     assembly.add_argument("--output", type=Path)
@@ -223,7 +228,11 @@ def parser():
 
 def main():
     args = parser().parse_args()
-    if args.command == "assemble":
+    if args.command == "research":
+        from .research import experiment
+
+        experiment(args.panel, args.output, args.config, holdout=args.holdout)
+    elif args.command == "assemble":
         print(json.dumps(assemble(args.data_dir, args.output), indent=2))
     elif args.command == "fixture":
         print(json.dumps(write_fixture(Path(args.output)), indent=2))
