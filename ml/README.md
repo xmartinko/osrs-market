@@ -226,3 +226,27 @@ uv run --project ml --frozen python -m osrs_ml.execution_audit \
   /home/martin/osrs-data/participation-bounds-v3 \
   /home/martin/osrs-data/assembled-v3/daily.parquet
 ```
+
+## Private weekly breadth and time-invariance research
+
+The frozen [deep-history protocol](../docs/deep-history-protocol.md) and
+[executed validation](../docs/deep-history-validation.md) cover private GE Tracker
+history, earlier-only weekly rank diagnostics and conditional participation CIs.
+All source responses, panels, scores and ledgers belong under the external
+`OSRS_DATA_DIR`, with explicit private-research acknowledgement; only aggregate
+findings and methodology belong in Git.
+
+`python -m osrs_ml.weekly_ingest` collects the complete frozen catalogue with eight
+workers by default (maximum sixteen), cached responses, atomic checkpoints and
+exponential backoff for 403/429/5xx or connection errors. There is no fixed request
+delay. Persistent errors pause collection; resume honors saved server backoff.
+`python -m osrs_ml.weekly_coverage` reports raw date-only spans, first years and
+annual development missingness. `python -m osrs_ml.weekly_research` fits only the
+six predeclared market features and evaluates annual later eras at exact one- and
+four-week horizons, without calendar or age features. Four/eight-week empirical
+blocks preserve cross-item dependence. Eligible per-item Gaussian mean intervals
+require the frozen normality and lag screens. Weekly returns remain diagnostics,
+not account profit claims. `python -m osrs_ml.uncertainty` uses the saved corrected
+development ledgers and seven/fourteen-day paired empirical blocks to report
+nonmonotone first-positive-grid intervals, including the no-positive infinity atom.
+The linked validation document provides the exact command lines and limitations.
