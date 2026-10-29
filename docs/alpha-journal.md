@@ -190,3 +190,19 @@ The output summary SHA-256 is
 The original independent 213-scenario audit was also rerun after attribution:
 passed, 23,537 fills, 22 productions, zero negative cash, capacity violations or
 holdout rows, `holdout_read=false`. Existing battery artifacts remain unchanged.
+
+## 2026-10-29 — cycle 3, own-fill measurement registered before intake
+
+Starting revision: `796d92b`. Read the five requested records in order. The cycle-2
+attribution identifies conversion spread, not inventory appreciation, as processing's
+simulated gain. Historical patient and cross-item failures remain failures; another
+historical replay would not identify our actual fills.
+
+Highest-value work: freeze the [processing own-fill calibration protocol](processing-own-fill-protocol.md)
+and implement an offline, immutable actual-event intake ledger with accounting,
+evidence-integrity and completeness gates. No orders will be placed and no market
+archive or reserved holdout will be read. Initialize an empty external study and
+report missing observations honestly. The fixed 56-day calibration is descriptive;
+it adds no alpha significance test and cannot rescue original adjusted p=1.
+No synthetic data will enter that study; accounting test fixtures remain tests only.
+Completion, executed verification and next lead will be appended below.
