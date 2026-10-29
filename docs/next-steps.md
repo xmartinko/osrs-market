@@ -205,3 +205,11 @@ including the selection of fills, rather than merely clamping zero prices and
 declaring the model repaired. Preserve these v1 results and version any corrected
 execution policy; then collect own-fill evidence and freeze a new forward trial.
 Foundation-model expansion remains deferred.
+
+## Decision after the 285-run diagnostics
+
+The next action is the [reasoned price/tick correction](execution-price-correction.md),
+written before implementation against `255dc6f`. It ranks the defects, withdraws
+cost interpretations of the old stressed results, specifies admissible prices,
+separates expected bps from whole-tick stress, and freezes the corrected replay.
+Own-fill calibration and a new prospective trial remain the economic gates.
