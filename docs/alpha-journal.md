@@ -347,3 +347,19 @@ Summary SHA-256:
 The holdout stayed sealed. No training, synthetic market/profit data, actual-order
 submission or C++ change occurred. The correction covers this finite diagnostic,
 not the prior research search; persistence is not confirmation of deployable alpha.
+
+## 2026-10-29 — cycle 5, fixed-gap reversal registered before outcomes
+
+Starting revision: `f1a3e1a`. Read the five requested records in order. Cycle 4
+established midpoint reversal with a shared signal/label endpoint. The actual-fill
+intake is already built and no actual records have been supplied this cycle.
+Highest-value feasible work is the [fixed-gap diagnostic](reversal-gap-protocol.md):
+midpoint signal, one intervening source bucket, disjoint future endpoints, fixed
+1/4-week lookbacks and horizons across all seven development eras. Exactly 28 new
+tests, 20,000 empirical block draws, blocks 4/8, with a conservative 140-test
+Bonferroni multiplier reserving the prior 112 field comparisons too.
+
+This is a source measurement diagnostic, not a retuned patient strategy, account
+profit test or independent confirmation. No holdout access, synthetic market data,
+Gaussian inference or C++ change. Register and commit before outcomes; completion,
+all corrected failures and executed verification will be appended below.
