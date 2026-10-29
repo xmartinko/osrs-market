@@ -89,6 +89,8 @@ def simulate(
     assumptions: ExecutionAssumptions,
     portfolio: PortfolioPolicy = DEFAULT_PORTFOLIO,
     tax: TaxPolicy = DEFAULT_TAX,
+    *,
+    allocation_bps: dict[tuple[int, int], int] | None = None,
 ) -> BacktestResult:
     prepared = observations if isinstance(observations, PreparedObservations) else None
     if prepared is not None:
@@ -399,8 +401,15 @@ def simulate(
             if target is None:
                 continue
             ceiling = (target + 9999) // 10_000
+            allocation = (
+                portfolio.allocation_bps
+                if allocation_bps is None
+                else allocation_bps.get((item, now), portfolio.allocation_bps)
+            )
+            if type(allocation) is not int or not 0 < allocation <= 10_000:
+                raise ValueError("Per-decision allocation must be integer bps in (0, 10000]")
             budget = min(
-                cash - reserved(), portfolio.initial_cash_gp * portfolio.allocation_bps // 10_000
+                cash - reserved(), portfolio.initial_cash_gp * allocation // 10_000
             )
             quantity = min(budget // ceiling, available_limit(item, now, row))
             if quantity <= 0:
