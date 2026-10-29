@@ -27,12 +27,17 @@ def run(source, output, acknowledged):
     panel = pd.read_parquet(source / "weekly.parquet")
     if not (panel.available_at < manifest["holdout_start"]).all():
         raise ValueError("Sealed observations in panel")
-    spans = []
+    spans, observed_years = [], []
     for kind, first, last, count in (
             ("raw_dates_only", "raw_first_timestamp", "raw_last_timestamp", "raw_rows"),
             ("development", "first_timestamp", "last_timestamp", "rows")):
         duration = (coverage[last] - coverage[first]) / YEAR
+        equivalents = coverage[count] * WEEK / YEAR
         for years in range(10):
+            observed_years.append(dict(scope=kind, observed_years_at_least=years,
+                                       observed_years_below=years + 1,
+                                       items=int((equivalents.ge(years) & equivalents.lt(years + 1) &
+                                                  coverage[count].gt(0)).sum())))
             part = coverage[duration.ge(years) & duration.lt(years + 1)]
             spans.append(dict(scope=kind, span_years_at_least=years, span_years_below=years + 1,
                               items=len(part), median_observed_weeks=float(part[count].median())
@@ -41,6 +46,7 @@ def run(source, output, acknowledged):
                           items=int(coverage[count].eq(0).sum()), median_observed_weeks=None))
     span_frame = pd.DataFrame(spans)
     span_frame.to_csv(output / "items-by-history-span.csv", index=False)
+    pd.DataFrame(observed_years).to_csv(output / "items-by-observed-years.csv", index=False)
     starts = []
     for kind, column in (("raw_dates_only", "raw_first_timestamp"),
                          ("development", "first_timestamp")):
