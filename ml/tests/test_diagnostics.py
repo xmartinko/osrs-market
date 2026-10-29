@@ -159,6 +159,18 @@ def test_ablation_changes_only_named_economics():
     assert policies["passive_slip_10bps"] == policies["only_slippage"]
 
 
+def test_saved_undefined_scores_require_matching_missing_price_inputs():
+    observations, predictions, fold = example()
+    observations.loc[0, "avg_high_price"] = np.nan
+    predictions.loc[0, ["no_change", "raw_spread", "spread_volume", "catboost"]] = np.nan
+    validate_fold(observations, predictions, fold, fold["end"])
+    # Matching is by item/time, independent of Arrow dtype or row order.
+    validate_fold(observations.iloc[::-1], predictions, fold, fold["end"])
+    observations.loc[0, "avg_high_price"] = 110
+    with pytest.raises(ValueError, match="valid price inputs"):
+        validate_fold(observations, predictions, fold, fold["end"])
+
+
 @pytest.fixture
 def frozen_run(tmp_path):
     observations, predictions, fold = example()

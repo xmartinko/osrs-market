@@ -89,8 +89,19 @@ def validate_fold(observations, predictions, fold, holdout_start):
         .equals(pd.MultiIndex.from_frame(predictions[KEYS].astype("int64")).sort_values())
     ):
         raise ValueError("Missing or extra prediction coverage")
-    if predictions[list(MODELS)].isna().any().any():
-        raise ValueError("Missing model scores; use -inf for ineligible decisions")
+    context = observations.copy()
+    context[KEYS] = context[KEYS].astype("int64")
+    context = context.set_index(KEYS).reindex(
+        pd.MultiIndex.from_frame(predictions[KEYS].astype("int64"))
+    )
+    for model in MODELS:
+        # Saved scores can legitimately be NaN: the original executor excludes
+        # nonfinite scores when the required price side is absent/inverted.
+        undefined = context.avg_high_price.isna() | context.inverted_spread
+        if model != "catboost":
+            undefined = undefined | context.avg_low_price.isna()
+        if (predictions[model].isna().to_numpy() & ~undefined.to_numpy(dtype=bool)).any():
+            raise ValueError("Missing model scores with valid price inputs")
     if np.isposinf(predictions[list(MODELS)].to_numpy(dtype=float)).any():
         raise ValueError("Positive infinite score")
     if not predictions.no_trade.eq(-np.inf).all():
@@ -173,6 +184,7 @@ def decision_gates(observations, predictions, model, assumptions):
     if assumptions.freshness_basis == "lower_bound":
         uncertainty = 0
     return {
+        "undefined_scores": int(predictions[model].isna().sum()),
         "positive_decisions": int(positive.sum()),
         "positive_missing_limit": int((positive & observations.buy_limit.isna()).sum()),
         "positive_nonpositive_limit": int((positive & (observations.buy_limit <= 0)).sum()),
