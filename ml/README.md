@@ -72,6 +72,25 @@ The audit loads only the manifest's development folds and verifies legal prices,
 cash/inventory accounting, costs and residuals, tax, capacity, limits, timing,
 offer ceilings, marks and no-trade invariants. It cannot establish achievable fills.
 
+## Frozen multi-horizon strategy battery
+
+The [registered battery](../docs/strategy-battery-protocol.md) and
+[executed results](../docs/strategy-battery-validation.md) cover 71 rules at three
+participation shares. All 213 scenarios completed; none survives search correction.
+The [alpha journal](../docs/alpha-journal.md) preserves continuation decisions.
+
+```bash
+export OSRS_DATA_DIR=/home/martin/osrs-data
+ml/.venv/bin/python -m osrs_ml.battery \
+  --output "$OSRS_DATA_DIR/strategy-battery-v1" --acknowledge-private-research
+ml/.venv/bin/python -m osrs_ml.battery_audit "$OSRS_DATA_DIR/strategy-battery-v1"
+```
+
+The runner resumes unchanged completed scenarios and refuses changed provenance.
+The independent audit checks source-priced fills, conversion inventory, cash,
+limits, slots, timing, participation, marks and complete-family reporting.
+All ledgers, the full aggregate CSVs and bootstrap diagnostics stay outside Git.
+
 ## Original harness usage
 
 From the repository root, with `uv` installed:

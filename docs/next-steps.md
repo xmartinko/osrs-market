@@ -218,6 +218,23 @@ declaring the model repaired. Preserve these v1 results and version any correcte
 execution policy; then collect own-fill evidence and freeze a new forward trial.
 Foundation-model expansion remains deferred.
 
+## After completing the frozen broad battery, 2026-10-29
+
+The [213-scenario validation](strategy-battery-validation.md) now supersedes any
+suggestion to run this same battery again as new evidence. All 71 registered rules
+and three participation shares completed with unchanged economic parameters.
+**Zero corrected survivors**; every Bonferroni-adjusted p-value is 1.0. Daily
+patient accounts are insufficiently active; weekly patient accounts fail the
+profit test. Cross-item weekly planning cases lose. No holdout was accessed.
+
+The next measurement lead is processing, whose 1% account has +1,764,761 GP
+including 1,654,387 GP of marked inventory, only eight completed batches and
+therefore registered p=1. Cash P&L is +110,374 GP. Audit the matched production
+batches and unmatched inputs, then pre-register prospective own-fill calibration
+with actual prices, tax and active time. This is an inconclusive measurement
+lead, not a corrected survivor. Do not tune failed rules against these outcomes.
+The append-only [alpha journal](alpha-journal.md) records this and future cycles.
+
 ## Decision after the 285-run diagnostics
 
 The next action is the [reasoned price/tick correction](execution-price-correction.md),
