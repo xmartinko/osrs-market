@@ -36,3 +36,9 @@ ml/.ruff_cache/
 ml/data/
 ml/runs/
 ml/environments/**/.venv/
+
+# External research data and immutable archives must never be committed
+/osrs-data/
+*.parquet
+*.cbm
+*.sqlite*

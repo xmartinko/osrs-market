@@ -13,12 +13,16 @@ class ExecutionAssumptions:
     unknown_interval_seconds: int = 300
     allow_unknown_metadata: bool = False
     freshness_basis: str = "upper_bound"
+    passive_prices: bool = False
+    queue_fill_bps: int = 10_000
 
     def __post_init__(self):
         if self.freshness_basis not in ("lower_bound", "upper_bound"):
             raise ValueError("Freshness basis must be lower_bound or upper_bound")
         if not 0 < self.participation_bps <= 10_000:
             raise ValueError("Invalid participation")
+        if not 0 < self.queue_fill_bps <= 10_000:
+            raise ValueError("Invalid queue fill assumption")
         if not 0 <= self.slippage_bps <= 10_000 or not 0 <= self.terminal_haircut_bps <= 10_000:
             raise ValueError("Invalid price adjustment")
         if min(self.latency_seconds, self.max_freshness_seconds) < 0:

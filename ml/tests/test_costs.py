@@ -7,7 +7,7 @@ from osrs_ml.costs import TaxPolicy, execution_price, sale_proceeds, tax_per_ite
     [
         (0, 0),
         (49, 0),
-        (50, 0),
+        (50, 1),
         (51, 1),
         (99, 1),
         (100, 2),
@@ -17,7 +17,7 @@ from osrs_ml.costs import TaxPolicy, execution_price, sale_proceeds, tax_per_ite
         (3_200_000_000, 5_000_000),
     ],
 )
-def test_requested_tax_boundaries(price, tax):
+def test_verified_tax_boundaries(price, tax):
     assert tax_per_item(price) == tax
 
 
@@ -28,6 +28,7 @@ def test_round_per_item_before_quantity_and_cap_per_item():
 
 def test_wiki_boundary_and_exemptions_configurable():
     assert tax_per_item(50, TaxPolicy(exempt_through_gp=49)) == 1
+    assert tax_per_item(50, TaxPolicy(exempt_through_gp=50)) == 0
     assert tax_per_item(10000, TaxPolicy(exempt_item_ids=(42,)), item_id=42) == 0
 
 

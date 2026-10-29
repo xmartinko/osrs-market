@@ -77,6 +77,8 @@ def simulate(
         return max(0, int(row["buy_limit"]) - used)
 
     def fresh(row: dict, side: str, now: int) -> bool:
+        if row.get("inverted_spread", False):
+            return False
         age_key = f"{side}_freshness_seconds"
         uncertainty = 0
         if assumptions.freshness_basis == "upper_bound":
@@ -136,10 +138,14 @@ def simulate(
                 or int(row["timestamp"]) < submitted + assumptions.latency_seconds
             ):
                 continue
-            side = "high" if order.stage == "buy" else "low"
+            buy_side, sell_side = ("low", "high") if assumptions.passive_prices else ("high", "low")
+            side = buy_side if order.stage == "buy" else sell_side
             if order.stage == "hold" or not fresh(row, side, now):
                 continue
-            capacity = int(row[f"{side}_price_volume"]) * assumptions.participation_bps // 10_000
+            capacity = (
+                int(row[f"{side}_price_volume"])
+                * assumptions.participation_bps * assumptions.queue_fill_bps // 100_000_000
+            )
             price = execution_price(
                 int(row[f"avg_{side}_price"]), assumptions.slippage_bps, buy=order.stage == "buy"
             )
@@ -210,11 +216,12 @@ def simulate(
             if (
                 item in active
                 or len(active) >= portfolio.offer_slots
-                or not fresh(row, "high", now)
+                or not fresh(row, "low" if assumptions.passive_prices else "high", now)
             ):
                 continue
             ceiling = execution_price(
-                int(row["avg_high_price"]), assumptions.slippage_bps, buy=True
+                int(row["avg_low_price"] if assumptions.passive_prices else row["avg_high_price"]),
+                assumptions.slippage_bps, buy=True
             )
             budget = min(
                 cash - reserved(), portfolio.initial_cash_gp * portfolio.allocation_bps // 10_000
@@ -287,6 +294,7 @@ def simulate(
         "peak_capital_tied_gp": max(p["capital_tied_gp"] for p in curve),
         "end_capital_tied_gp": curve[-1]["capital_tied_gp"],
         "mean_buy_wait_seconds": wait_seconds_units / bought if bought else 0.0,
+        "turnover": sum(abs(f["cash_delta_gp"]) for f in fills) / portfolio.initial_cash_gp,
         "execution": asdict(assumptions),
         "portfolio": asdict(portfolio),
         "tax": asdict(tax),

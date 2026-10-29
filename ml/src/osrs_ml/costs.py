@@ -6,7 +6,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class TaxPolicy:
     rate_bps: int = 200
-    exempt_through_gp: int = 50  # Requested boundary; use 49 for the Wiki boundary.
+    exempt_through_gp: int = 49  # Jagex 2025-05-29: UNDER 50; exactly 50 pays 1 gp.
     cap_gp: int = 5_000_000
     exempt_item_ids: tuple[int, ...] = ()
 
