@@ -128,6 +128,8 @@ def development_rows(record, item_id, cutoff):
     if record["status"] != "ok":
         return []
     payload = record["payload"]
+    if isinstance(payload, dict) and payload.get("status") == "error":
+        return []  # HTTP 200 provider failures are retained, never retried as network errors.
     if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
         raise ValueError("Unexpected graph API schema")
     rows, seen = [], set()
@@ -162,13 +164,17 @@ def assemble(root, universe, cutoff):
         part = development_rows(record, item_id, cutoff) if path.exists() else []
         rows.extend(part)
         times = sorted(row["timestamp"] for row in part)
-        raw_times = [p["ts"] // 1000 for p in record.get("payload", {}).get("data", [])]
+        payload = record.get("payload", {})
+        application_error = payload.get("status") == "error"
+        raw_times = [p["ts"] // 1000 for p in (payload.get("data") or [])]
         coverage.append({
-            "item_id": item_id, "status": record["status"], "rows": len(part),
+            "item_id": item_id,
+            "status": "application_error" if application_error else record["status"], "rows": len(part),
             "first_timestamp": min(times) if times else None,
             "last_timestamp": max(times) if times else None,
             "gaps_over_8_days": sum(b - a > 8 * 86400 for a, b in zip(times, times[1:], strict=False)),
-            "error": record.get("error"),
+            "error": payload.get("msg", "Provider application error") if application_error
+            else record.get("error"),
             "raw_rows": len(raw_times),
             "raw_first_timestamp": min(raw_times) if raw_times else None,
             "raw_last_timestamp": max(raw_times) if raw_times else None,

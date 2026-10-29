@@ -198,3 +198,20 @@ def test_retry_after_survives_restart_in_seconds_or_http_date(tmp_path, monkeypa
     monkeypatch.setattr(module.urllib.request, "urlopen", lambda *a, **k: io.BytesIO(b'{"data":[]}'))
     assert Archive(tmp_path).fetch("retry", "https://example.org")["status"] == "ok"
     assert sleeps == [30]
+
+
+
+def test_http_200_provider_error_is_preserved_as_unknown_history_without_retry(tmp_path, monkeypatch):
+    from osrs_ml import weekly_ingest as module
+
+    bad = record([])
+    bad["payload"] = dict(status="error", msg="Please try again in a minute", source="runelite")
+    (tmp_path / "graph-2.json").write_text(json.dumps(bad))
+    assert development_rows(bad, 2, 10 * WEEK) == []
+    n, coverage = assemble(tmp_path, [2], 10 * WEEK)
+    assert n == 0 and coverage[0]["status"] == "application_error"
+    assert coverage[0]["error"] == "Please try again in a minute"
+    def forbidden(*a, **k):
+        pytest.fail("HTTP 200 application errors are not retryable under the frozen policy")
+    monkeypatch.setattr(module.urllib.request, "urlopen", forbidden)
+    assert Archive(tmp_path).fetch("graph-2", bad["source_url"]) == bad
