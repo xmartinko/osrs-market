@@ -143,3 +143,36 @@ legacy version and compare all saved accounting/exposure metrics. Then publish
 v2 results and explicit deltas; preserve every earlier artifact. Audit legal
 fills and achieved costs. The resulting cost distribution is a sensitivity,
 not own-fill calibration. No C++ changes are needed.
+
+## Implementation checkpoint
+
+Implementation `114772a` makes `integer_lots_v2` the executor default and quarantines
+legacy arithmetic for reproduction. `901242f` adds an independent development-ledger
+auditor and corruption regressions. All original 54 tests are retained; 20 additional
+cases cover the corrected defects and replay/audit behavior.
+
+Executed:
+
+```text
+$ uv run --project ml --frozen pytest -q
+........................................................................ [ 97%]
+..                                                                       [100%]
+74 passed in 14.33s
+$ uv run --project ml --frozen ruff check --config ml/pyproject.toml ml/src ml/tests
+All checks passed!
+```
+
+The real-data replay was launched from clean implementation commit `114772a`:
+
+```bash
+OSRS_DATA_DIR=/home/martin/osrs-data uv run --project ml --frozen \
+  osrs-ml diagnose-execution \
+  --panel /home/martin/osrs-data/assembled-v3/daily.parquet \
+  --development-run ml/runs/phase2-real-v1 \
+  --output /home/martin/osrs-data/execution-price-correction-v2 \
+  > /home/martin/osrs-data/execution-price-correction-v2.log 2>&1
+```
+
+Completion, market figures and audit output will be recorded in a linked validation
+record after the command and independent audit finish. The implementation was frozen
+before this run; subsequent work here adds auditing and documentation only.

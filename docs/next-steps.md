@@ -67,9 +67,9 @@ three negative moderate folds. Nor are the folds three independent market trials
    from a free-spread artefact; a failing instant-side replay alone cannot reject
    every passive strategy. An adequate execution history, not a particular count
    of model adapters, is the gate to economic claims.
-3. **Freeze a new prospective, nonvacuous evaluation.** The old holdout access
-   was consumed even though it proved nothing; do not reopen it under new rules
-   and call it untouched. Define coverage, eligible decisions, requested units,
+3. **Freeze a new prospective, nonvacuous evaluation.** Keep the existing holdout
+   sealed under its original protocol; do not use it to assess or select these
+   corrected execution rules. Define coverage, eligible decisions, requested units,
    bought/sold units and independent temporal coverage gates before examining
    outcomes. Show zero-trade reasons and mark insufficient activity inconclusive.
    Freeze an execution envelope justified by step 2, minimum usable sample and
@@ -148,7 +148,7 @@ Phase 3 should become execution diagnosis, prospective data qualification and
 calibration, with an explicit inconclusive outcome available. Phase 4 should be
 an economically aligned CatBoost/simple-control trial on a newly frozen forward
 period. Foundation adapters and out-of-fold stacking move behind that gate.
-Do not tune against the already consumed holdout or relabel current-limit
+Do not tune against the sealed holdout or relabel current-limit
 sensitivity as historical results. If calibrated achievable fills still cannot
 beat no-trade with useful confidence, stop model expansion and reconsider the
 strategy/horizon. If only passive execution works, research that specific strategy
@@ -213,3 +213,8 @@ written before implementation against `255dc6f`. It ranks the defects, withdraws
 cost interpretations of the old stressed results, specifies admissible prices,
 separates expected bps from whole-tick stress, and freezes the corrected replay.
 Own-fill calibration and a new prospective trial remain the economic gates.
+
+The earlier wording claiming the holdout had been consumed was unsupported: the
+frozen development manifest records `holdout_evaluated=false`. No holdout access
+markers or artifacts were opened to investigate that wording. The restriction
+for this correction is to keep it sealed and use development forecasts only.
