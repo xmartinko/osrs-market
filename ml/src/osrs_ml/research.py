@@ -26,7 +26,6 @@ FEATURES = [
     "log_volume",
     "log_volume_7obs",
     "gap_days",
-    "history_rows",
     "high_missing",
     "low_missing",
     "item",
