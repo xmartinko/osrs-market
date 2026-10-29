@@ -19,9 +19,13 @@ availability as permission for unrestricted reuse.
 All source responses, metadata and derived panels live **outside the repository**
 under `OSRS_DATA_DIR=/home/martin/osrs-data`. The ingester requires the explicit
 `--acknowledge-private-research` flag, rejects paths inside the repository (including
-resolved symlinks), and uses a process lock and at least two seconds between request
-starts. Cached successes, empty results and failures are retained; resume does not
-refetch them. A 403/429 stops collection; no proxies or access workarounds. An
+resolved symlinks), and uses a process lock with bounded concurrency (eight workers
+by default, up to sixteen). There is no artificial inter-request delay. The earlier
+two-second limit was a user-supplied assumption, withdrawn on 2026-10-29; it was
+not a source term. Cached successes, empty results and nonretryable failures are
+retained. Only 403/429/5xx and connection failures retry with exponential backoff;
+persistent errors pause scheduling, are reported, and can be retried on resume.
+Blocking does not establish that access is forbidden. No access workarounds. An
 interrupted collection resumes its immutable universe and original version directory.
 Each cached response and every panel row carries URL, fetch timestamp, source and
 schema version. Delete the whole version directory and its derived artifacts on a

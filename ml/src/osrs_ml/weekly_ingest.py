@@ -1,4 +1,4 @@
-"""Restricted, resumable GE Tracker API archive. Never imported by the product."""
+"""Private, concurrent, resumable GE Tracker archive. Never imported by the product."""
 
 import argparse
 import fcntl
@@ -7,8 +7,10 @@ import os
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime, timezone
 from pathlib import Path
+from threading import Event
 
 import pandas as pd
 
@@ -32,51 +34,76 @@ def external_directory(path, acknowledged):
     repo = Path(__file__).resolve().parents[3]
     path = Path(path).resolve()
     if path.is_relative_to(repo) or root.is_relative_to(repo) or not path.is_relative_to(root):
-        raise ValueError("Restricted data must be under OSRS_DATA_DIR outside the repository")
+        raise ValueError("Private research data must be under OSRS_DATA_DIR outside the repository")
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
+def retryable(record):
+    error = record.get("error", "")
+    return (record.get("retryable", False) or error in ("HTTP 403", "HTTP 429")
+            or any(error == f"HTTP {code}" for code in range(500, 600)))
+
+
 class Archive:
-    def __init__(self, root, *, interval=2.0):
-        if interval < 2:
-            raise ValueError("Request interval must be at least two seconds")
-        self.root, self.interval = root, interval
-        self.clock = root.parent / ".ge-tracker-last-request.json"
+    def __init__(self, root, *, retries=4, backoff=1.0):
+        if retries < 0 or backoff <= 0:
+            raise ValueError("Nonnegative retries and positive backoff required")
+        self.root, self.retries, self.backoff = root, retries, backoff
+        self.stopped = Event()
 
     def fetch(self, key, url):
         path = self.root / f"{key}.json"
+        previous_attempts = []
         if path.exists():
             record = json.loads(path.read_text())
             if record["source_url"] != url or record["schema_version"] != VERSION:
                 raise ValueError("Cache provenance mismatch")
-            if record.get("error") in ("HTTP 401", "HTTP 403", "HTTP 429"):
-                raise RuntimeError("Cached access refusal; stop without bypass or retry")
-            return record
-        # Persist across restarts as well as requests. A caller holds the global lock.
-        previous = json.loads(self.clock.read_text())["unix"] if self.clock.exists() else 0
-        time.sleep(max(0, self.interval - (time.time() - previous)))
-        atomic_json(self.clock, {"unix": time.time()})
-        record = {
-            "source": SOURCE, "schema_version": VERSION, "source_url": url,
-            "fetched_at": datetime.now(timezone.utc).isoformat(),
-        }
-        try:
-            request = urllib.request.Request(url, headers={
-                "Accept": "application/x.getracker.v2.1+json",
-                "User-Agent": "osrs-market-private-research/1.0 (single-client cached research)",
-            })
-            with urllib.request.urlopen(request, timeout=45) as response:
-                record.update(status="ok", payload=json.load(response))
-        except urllib.error.HTTPError as error:
-            record.update(status="error", error=f"HTTP {error.code}")
+            if not retryable(record):
+                return record
+            previous_attempts = record.get("attempts", [])
+        for attempt in range(self.retries + 1):
+            if self.stopped.is_set():
+                raise RuntimeError("Collection paused after persistent source/network errors; resume later")
+            record = {
+                "source": SOURCE, "schema_version": VERSION, "source_url": url,
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+                "attempts": previous_attempts.copy(),
+            }
+            retry_after = 0
+            try:
+                request = urllib.request.Request(url, headers={
+                    "Accept": "application/x.getracker.v2.1+json",
+                    "User-Agent": "osrs-market-private-research/1.1 (cached research)",
+                })
+                with urllib.request.urlopen(request, timeout=45) as response:
+                    record.update(status="ok", payload=json.load(response), retryable=False)
+            except urllib.error.HTTPError as error:
+                record.update(status="error", error=f"HTTP {error.code}",
+                              retryable=error.code in (403, 429) or 500 <= error.code < 600)
+                try:
+                    retry_after = max(0, float(error.headers.get("Retry-After", 0)))
+                except (ValueError, TypeError, AttributeError):
+                    pass
+            except (OSError, TimeoutError) as error:
+                record.update(status="error", error=str(error), retryable=True)
+            except ValueError as error:
+                record.update(status="error", error=str(error), retryable=False)
+            record["attempts"].append({k: record[k] for k in
+                                       ("fetched_at", "status", "retryable", "error") if k in record})
+            previous_attempts = record["attempts"]
             atomic_json(path, record)
-            if error.code in (401, 403, 429):
-                raise RuntimeError(f"Access refused ({error.code}); stop without bypass or retry") from error
-        except (OSError, ValueError) as error:
-            record.update(status="error", error=str(error))
-        atomic_json(path, record)
-        return record
+            if not retryable(record):
+                return record
+            if attempt == self.retries:
+                self.stopped.set()
+                raise RuntimeError(f"Persistent {record['error']} at {url}; collection paused, "
+                                   "cached and resumable (source not declared forbidden)")
+            delay = max(retry_after, self.backoff * 2 ** attempt)
+            print(f"Retry {attempt + 1}/{self.retries} {url}: {record['error']}; "
+                  f"backoff={delay:g}s", flush=True)
+            time.sleep(delay)
+        raise AssertionError("Unreachable")
 
 
 def development_rows(record, item_id, cutoff):
@@ -158,7 +185,9 @@ def assemble(root, universe, cutoff):
     return len(panel), coverage
 
 
-def run(output, acknowledged, development_run, *, checkpoint=100):
+def run(output, acknowledged, development_run, *, checkpoint=250, workers=8):
+    if not 1 <= workers <= 16:
+        raise ValueError("Use between 1 and 16 workers")
     root = external_directory(output, acknowledged)
     lock = (root.parent / ".ge-tracker.lock").open("a")
     fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -188,14 +217,37 @@ def run(output, acknowledged, development_run, *, checkpoint=100):
         manifest.update(status="running")
         atomic_json(manifest_path, manifest)
         try:
-            for index, item_id in enumerate(universe, 1):
-                record = archive.fetch(f"graph-{item_id}", f"{BASE}/graph/{item_id}/all")
-                if index % checkpoint == 0 or index == len(universe):
-                    n, coverage = assemble(root, universe, cutoff)
-                    manifest.update(completed=index, rows=n, updated_at=datetime.now(timezone.utc).isoformat())
-                    atomic_json(manifest_path, manifest)
-                    print(f"Archived {index}/{len(universe)} items; development rows={n}; "
-                          f"last_status={record['status']}; holdout NOT analyzed", flush=True)
+            manifest.update(workers=workers, ingest_code_sha256=sha256(Path(__file__)))
+            atomic_json(manifest_path, manifest)
+            started = time.monotonic()
+            iterator = iter(universe)
+            completed = 0
+            # Bound queued work as well as live requests; pause scheduling on persistent errors.
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                pending = set()
+                def submit_one():
+                    item_id = next(iterator, None)
+                    if item_id is not None:
+                        pending.add(pool.submit(archive.fetch, f"graph-{item_id}",
+                                                f"{BASE}/graph/{item_id}/all"))
+                for _ in range(workers):
+                    submit_one()
+                while pending:
+                    done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                    for future in done:
+                        future.result()
+                        completed += 1
+                        if completed % checkpoint == 0 or completed == len(universe):
+                            manifest.update(completed=completed,
+                                            updated_at=datetime.now(timezone.utc).isoformat())
+                            atomic_json(manifest_path, manifest)
+                            print(f"Archived {completed}/{len(universe)} items; "
+                                  f"elapsed={time.monotonic() - started:.1f}s; "
+                                  "holdout NOT analyzed", flush=True)
+                        submit_one()
+            n, coverage = assemble(root, universe, cutoff)
+            manifest.update(rows=n, statuses=pd.Series([r["status"] for r in coverage])
+                            .value_counts().to_dict(), elapsed_seconds=time.monotonic() - started)
             manifest.update(status="complete", panel_sha256=sha256(root / "weekly.parquet"))
             atomic_json(manifest_path, manifest)
         except BaseException as error:
@@ -211,8 +263,9 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--development-run", type=Path, required=True)
     parser.add_argument("--acknowledge-private-research", action="store_true")
+    parser.add_argument("--workers", type=int, default=8)
     args = parser.parse_args()
-    run(args.output, args.acknowledge_private_research, args.development_run)
+    run(args.output, args.acknowledge_private_research, args.development_run, workers=args.workers)
 
 
 if __name__ == "__main__":
