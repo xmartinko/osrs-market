@@ -172,7 +172,7 @@ def normality_diagnostics(f, output):
                                                screen["p_value"] >= .05 and len(x) >= 30 and
                                                lag is not None and abs(lag) <= .1)
             base = dict(item_id=int(item_id), metric=metric, **screen)
-            if len(x) < 2 or np.ptp(x) == 0:
+            if len(x) < 20 or np.ptp(x) == 0:
                 rows.append(dict(**base, block_weeks=0, method="insufficient_or_constant",
                                  mean=float(x.mean()) if len(x) else None, lower=None, upper=None))
             elif screen["gaussian_eligible"]:
@@ -305,6 +305,11 @@ def run(source, output, acknowledged):
         atomic_json(output / "normality-complete.json", dict(
             item_sha256=sha256(output / "item-normality-intervals.csv"),
             band_sha256=sha256(output / "band-normality-intervals.csv")))
+    else:
+        normality_cache = json.loads((output / "normality-complete.json").read_text())
+        if (normality_cache["item_sha256"] != sha256(output / "item-normality-intervals.csv") or
+                normality_cache["band_sha256"] != sha256(output / "band-normality-intervals.csv")):
+            raise ValueError("Cached normality checksum mismatch")
     result = pd.DataFrame(summaries)
     screen = result[result.metric.isin(["rank_correlation", "top_excess_tax"])]
     verdict = screen.groupby(["horizon_weeks", "rule"]).agg(
