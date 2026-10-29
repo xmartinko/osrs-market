@@ -234,3 +234,28 @@ def test_truncated_http_body_is_retried_as_connection_failure(tmp_path, monkeypa
     monkeypatch.setattr(module.time, "sleep", sleeps.append)
     assert Archive(tmp_path).fetch("truncated", "https://example.org")["status"] == "ok"
     assert sleeps == [1.] and len(calls) == 2
+
+
+def test_streaming_chunks_preserve_exact_rows_nulls_provenance_and_annual_counts(tmp_path):
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    universe, expected = list(range(1, 21)), []
+    for item_id in universe:
+        cached = record([point(t * WEEK) for t in range(500)])
+        cached["source_url"] = f"https://www.ge-tracker.com/api/graph/{item_id}/all"
+        if item_id == 1:
+            cached["payload"]["data"][0]["buyingPrice"] = None
+        (tmp_path / f"graph-{item_id}.json").write_text(json.dumps(cached))
+        expected.extend(development_rows(cached, item_id, 600 * WEEK))
+    n, coverage = assemble(tmp_path, universe, 600 * WEEK)
+    actual = pd.read_parquet(tmp_path / "weekly.parquet")
+    pd.testing.assert_frame_equal(actual, pd.DataFrame(expected), check_dtype=False)
+    assert n == 10000 == sum(row["rows"] for row in coverage)
+    physical = pq.ParquetFile(tmp_path / "weekly.parquet")
+    assert physical.num_row_groups == 2
+    assert physical.schema_arrow.field("buyingPrice").type == pa.int64()
+    assert pd.isna(actual.iloc[0].buyingPrice)
+    annual = pd.read_csv(tmp_path / "annual-coverage.csv")
+    assert annual.rows.sum() == n and annual["items"].eq(len(universe)).all()
+    assert annual.positive_two_side_rows.sum() == n - 1

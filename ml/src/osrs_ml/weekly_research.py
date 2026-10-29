@@ -244,7 +244,10 @@ def run(source, output, acknowledged):
     panel_path = source / "weekly.parquet"
     if sha256(panel_path) != source_manifest["panel_sha256"]:
         raise ValueError("Panel checksum mismatch")
-    panel = pd.read_parquet(panel_path)
+    panel = pd.read_parquet(panel_path, columns=[
+        "item_id", "timestamp", "available_at", "overallPrice", "buyingPrice", "sellingPrice",
+        "buyingCompleted", "sellingCompleted",
+    ])
     cutoff = source_manifest["holdout_start"]
     if not ((panel.available_at < cutoff) &
             (panel.available_at == panel.timestamp + WEEK + 300)).all():
@@ -266,7 +269,7 @@ def run(source, output, acknowledged):
             print("Analysis already complete; immutable cached result retained", flush=True)
             return
     atomic_json(output / "run.json", manifest)
-    f = features(panel)
+    f = features(panel).drop(columns=["overallPrice", "buyingCompleted", "sellingCompleted"])
     del panel
     summaries = []
     for horizon in (1, 4):
@@ -320,6 +323,7 @@ def run(source, output, acknowledged):
             atomic_json(output / "run.json", manifest)
             print(f"Earlier-only horizon={horizon} year={year}: train={len(train)} test={len(test)} "
                   f"weeks={len(grid)}; train labels < {start}; holdout NOT read", flush=True)
+        del labeled, train, test, scores
     stability(f, output)
     if not (output / "normality-complete.json").exists():
         normality_diagnostics(f, output)

@@ -24,7 +24,10 @@ def run(source, output, acknowledged):
     coverage = pd.read_csv(source / "coverage.csv")
     if set(coverage.item_id) != set(manifest["universe"]) or coverage.item_id.duplicated().any():
         raise ValueError("Coverage universe mismatch")
-    panel = pd.read_parquet(source / "weekly.parquet")
+    panel = pd.read_parquet(source / "weekly.parquet", columns=[
+        "item_id", "timestamp", "available_at", "overallPrice", "buyingPrice", "sellingPrice",
+        "buyingCompleted", "sellingCompleted",
+    ])
     if not (panel.available_at < manifest["holdout_start"]).all():
         raise ValueError("Sealed observations in panel")
     spans, observed_years = [], []

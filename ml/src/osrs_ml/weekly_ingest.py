@@ -15,6 +15,8 @@ from pathlib import Path
 from threading import Event
 
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from .data import sha256
 from .diagnostics import atomic_json
@@ -157,56 +159,70 @@ def development_rows(record, item_id, cutoff):
 
 
 def assemble(root, universe, cutoff):
-    """No sparse-item filtering. One coverage row per requested identifier."""
-    rows, coverage = [], []
-    for item_id in universe:
-        path = root / f"graph-{item_id}.json"
-        record = json.loads(path.read_text()) if path.exists() else {"status": "pending"}
-        part = development_rows(record, item_id, cutoff) if path.exists() else []
-        rows.extend(part)
-        times = sorted(row["timestamp"] for row in part)
-        payload = record.get("payload", {})
-        application_error = payload.get("status") == "error"
-        raw_times = [p["ts"] // 1000 for p in (payload.get("data") or [])]
-        coverage.append({
-            "item_id": item_id,
-            "status": "application_error" if application_error else record["status"], "rows": len(part),
-            "first_timestamp": min(times) if times else None,
-            "last_timestamp": max(times) if times else None,
-            "gaps_over_8_days": sum(b - a > 8 * 86400 for a, b in zip(times, times[1:], strict=False)),
-            "error": payload.get("msg", "Provider application error") if application_error
-            else record.get("error"),
-            "raw_rows": len(raw_times),
-            "raw_first_timestamp": min(raw_times) if raw_times else None,
-            "raw_last_timestamp": max(raw_times) if raw_times else None,
-            "full_9_7_year_span": bool(raw_times and
-                                      max(raw_times) - min(raw_times) >= 9.7 * 365.25 * 86400),
-        })
-    panel = pd.DataFrame(rows, columns=[
-        "item_id", "timestamp", "available_at", *FIELDS, "source", "source_url",
-        "fetched_at", "schema_version", "provider_source",
-    ])
-    if not panel.empty:
-        for col in FIELDS:
-            panel[col] = pd.array(panel[col], dtype="int64[pyarrow]")
+    """Stream every observed row; keep coverage for sparse/empty/error identifiers."""
+    columns = ["item_id", "timestamp", "available_at", *FIELDS, "source", "source_url",
+               "fetched_at", "schema_version", "provider_source"]
+    numeric = {"item_id", "timestamp", "available_at", "schema_version", *FIELDS}
+    schema = pa.schema([(c, pa.int64() if c in numeric else pa.string()) for c in columns])
     temporary = root / "weekly.partial.parquet"
-    panel.to_parquet(temporary, index=False)
+    coverage, buffer, annual = [], [], {}
+    total = 0
+
+    def flush(writer):
+        nonlocal total
+        if not buffer:
+            return
+        frame = pd.DataFrame(buffer, columns=columns)
+        for col in FIELDS:
+            frame[col] = pd.array(frame[col], dtype="int64[pyarrow]")
+        writer.write_table(pa.Table.from_pandas(frame, schema=schema, preserve_index=False))
+        total += len(frame)
+        years = pd.to_datetime(frame.timestamp, unit="s", utc=True).dt.year
+        for year, group in frame.groupby(years):
+            entry = annual.setdefault(int(year), dict(items=set(), rows=0, positive_two_side_rows=0))
+            entry["items"].update(group.item_id.unique())
+            entry["rows"] += len(group)
+            entry["positive_two_side_rows"] += int(((group.buyingPrice > 0) &
+                                                   (group.sellingPrice > 0) &
+                                                   (group.buyingCompleted > 0) &
+                                                   (group.sellingCompleted > 0)).sum())
+        buffer.clear()
+
+    with pq.ParquetWriter(temporary, schema) as writer:
+        for item_id in universe:
+            path = root / f"graph-{item_id}.json"
+            record = json.loads(path.read_text()) if path.exists() else {"status": "pending"}
+            part = development_rows(record, item_id, cutoff) if path.exists() else []
+            buffer.extend(part)
+            times = sorted(row["timestamp"] for row in part)
+            payload = record.get("payload", {})
+            application_error = payload.get("status") == "error"
+            raw_times = [p["ts"] // 1000 for p in (payload.get("data") or [])]
+            coverage.append({
+                "item_id": item_id,
+                "status": "application_error" if application_error else record["status"],
+                "rows": len(part),
+                "first_timestamp": min(times) if times else None,
+                "last_timestamp": max(times) if times else None,
+                "gaps_over_8_days": sum(b - a > 8 * 86400 for a, b in
+                                        zip(times, times[1:], strict=False)),
+                "error": payload.get("msg", "Provider application error") if application_error
+                else record.get("error"),
+                "raw_rows": len(raw_times),
+                "raw_first_timestamp": min(raw_times) if raw_times else None,
+                "raw_last_timestamp": max(raw_times) if raw_times else None,
+                "full_9_7_year_span": bool(raw_times and max(raw_times) - min(raw_times) >=
+                                          9.7 * 365.25 * 86400),
+            })
+            if len(buffer) >= 8192:
+                flush(writer)
+        flush(writer)
     temporary.replace(root / "weekly.parquet")
     pd.DataFrame(coverage).to_csv(root / "coverage.csv", index=False)
-    annual = []
-    if not panel.empty:
-        years = pd.to_datetime(panel.timestamp, unit="s", utc=True).dt.year
-        for year, group in panel.groupby(years):
-            annual.append({
-                "year": int(year), "items": int(group.item_id.nunique()), "rows": len(group),
-                "universe": len(universe),
-                "positive_two_side_rows": int(((group.buyingPrice > 0) &
-                                              (group.sellingPrice > 0) &
-                                              (group.buyingCompleted > 0) &
-                                              (group.sellingCompleted > 0)).sum()),
-            })
-    pd.DataFrame(annual).to_csv(root / "annual-coverage.csv", index=False)
-    return len(panel), coverage
+    annual_rows = [dict(year=year, **{**v, "items": len(v["items"])}, universe=len(universe))
+                   for year, v in sorted(annual.items())]
+    pd.DataFrame(annual_rows).to_csv(root / "annual-coverage.csv", index=False)
+    return total, coverage
 
 
 def run(output, acknowledged, development_run, *, checkpoint=250, workers=8):
