@@ -261,3 +261,19 @@ Initial readiness report SHA-256:
 `48c1cfc4cab6cfee3e31e15504b40435a01ff3c0baee63d75f2477d8dcf9451c`.
 The reserved holdout remained sealed; no archive market rows, forward aggregate
 prices, training, synthetic profit evidence or C++ changes were used.
+
+## 2026-10-29 — cycle 4, reversal field audit registered before outcomes
+
+Starting revision: `94fa346`. Read the five requested records in order. Processing
+own-fill intake already exists and has no actual observations; rebuilding it or
+replaying the failed battery would add no economic evidence. The source-price
+reversal finding is still worth testing for measurement dependence: overallPrice
+lies outside the side-average band in 15.50% of usable rows in the prior audit.
+
+Highest-value feasible work: the [frozen field audit](reversal-field-audit-protocol.md),
+comparing four overall/midpoint signal/label cells, both fixed lookbacks and
+horizons, and seven development eras on matched item sets. There are 112 tests,
+20,000 empirical block draws, two block lengths and Bonferroni correction. This
+tests a measurement explanation, not expected profit; prior account failures and
+the own-fill gate stand. No new trading rule, holdout read, synthetic profit
+evidence or C++ change. Outcomes and executed checks will be appended later.
