@@ -9,6 +9,7 @@ import urllib.error
 import urllib.request
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from threading import Event
 
@@ -62,6 +63,11 @@ class Archive:
             if not retryable(record):
                 return record
             previous_attempts = record.get("attempts", [])
+            remaining = max(0, record.get("retry_not_before", 0) - time.time())
+            if remaining:
+                print(f"Cached transient error at {url}; honoring remaining backoff={remaining:.1f}s",
+                      flush=True)
+                time.sleep(remaining)
         for attempt in range(self.retries + 1):
             if self.stopped.is_set():
                 raise RuntimeError("Collection paused after persistent source/network errors; resume later")
@@ -81,16 +87,27 @@ class Archive:
             except urllib.error.HTTPError as error:
                 record.update(status="error", error=f"HTTP {error.code}",
                               retryable=error.code in (403, 429) or 500 <= error.code < 600)
+                record["http_status"] = error.code
+                record["response_headers"] = {k: error.headers[k] for k in (
+                    "Date", "Retry-After", "X-RateLimit-Limit", "X-RateLimit-Remaining",
+                    "X-RateLimit-Reset", "Server") if error.headers and k in error.headers}
+                header = record["response_headers"].get("Retry-After", "0")
                 try:
-                    retry_after = max(0, float(error.headers.get("Retry-After", 0)))
-                except (ValueError, TypeError, AttributeError):
-                    pass
+                    retry_after = max(0, float(header))
+                except (ValueError, TypeError):
+                    try:
+                        retry_after = max(0, parsedate_to_datetime(header).timestamp() - time.time())
+                    except (ValueError, TypeError, OverflowError):
+                        pass
             except (OSError, TimeoutError) as error:
                 record.update(status="error", error=str(error), retryable=True)
             except ValueError as error:
                 record.update(status="error", error=str(error), retryable=False)
-            record["attempts"].append({k: record[k] for k in
-                                       ("fetched_at", "status", "retryable", "error") if k in record})
+            if retryable(record):
+                record["retry_not_before"] = time.time() + max(retry_after, self.backoff * 2 ** attempt)
+            record["attempts"].append({k: record[k] for k in (
+                "fetched_at", "status", "retryable", "error", "http_status", "response_headers",
+                "retry_not_before") if k in record})
             previous_attempts = record["attempts"]
             atomic_json(path, record)
             if not retryable(record):

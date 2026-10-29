@@ -86,6 +86,11 @@ def test_transient_failure_backoff_and_resume(tmp_path, monkeypatch, code):
     from osrs_ml import weekly_ingest as module
 
     calls, sleeps = [], []
+    clock = [1000.]
+    def sleep(seconds):
+        sleeps.append(seconds)
+        clock[0] += seconds
+    monkeypatch.setattr(module.time, "time", lambda: clock[0])
     def transient(*a, **k):
         calls.append(1)
         if len(calls) <= 2:
@@ -93,7 +98,7 @@ def test_transient_failure_backoff_and_resume(tmp_path, monkeypatch, code):
         return io.BytesIO(b'{"data": []}')
 
     monkeypatch.setattr(module.urllib.request, "urlopen", transient)
-    monkeypatch.setattr(module.time, "sleep", sleeps.append)
+    monkeypatch.setattr(module.time, "sleep", sleep)
     archive = Archive(tmp_path, retries=1)
     with pytest.raises(RuntimeError, match="paused"):
         archive.fetch("new", "https://example.org")
@@ -101,6 +106,8 @@ def test_transient_failure_backoff_and_resume(tmp_path, monkeypatch, code):
     cached = json.loads((tmp_path / "new.json").read_text())
     assert cached["error"] == f"HTTP {code}"
     assert len(cached["attempts"]) == 2
+    assert cached["http_status"] == code
+    clock[0] = cached["retry_not_before"]  # Resume after the persisted backoff boundary.
     resumed = Archive(tmp_path).fetch("new", "https://example.org")
     assert resumed["status"] == "ok"
     assert len(resumed["attempts"]) == 3
@@ -163,3 +170,31 @@ def test_full_universe_bounded_concurrency_and_cached_resume(tmp_path, monkeypat
     module.run(root, True, dev, workers=2)
     assert len(calls) == 5
     assert pd.read_csv(root / "coverage.csv").item_id.tolist() == [2, 3, 4, 5]
+
+
+@pytest.mark.parametrize("retry_after", ["30", "Thu, 01 Jan 1970 00:17:10 GMT"])
+def test_retry_after_survives_restart_in_seconds_or_http_date(tmp_path, monkeypatch, retry_after):
+    import io
+    import urllib.error
+
+    from osrs_ml import weekly_ingest as module
+
+    clock, sleeps = [1000.], []
+    monkeypatch.setattr(module.time, "time", lambda: clock[0])
+    def sleep(seconds):
+        sleeps.append(seconds)
+        clock[0] += seconds
+    monkeypatch.setattr(module.time, "sleep", sleep)
+    def denied(*a, **k):
+        raise urllib.error.HTTPError("https://example.org", 429, "wait",
+                                     {"Retry-After": retry_after, "X-RateLimit-Limit": "200"}, None)
+    monkeypatch.setattr(module.urllib.request, "urlopen", denied)
+    with pytest.raises(RuntimeError, match="paused"):
+        Archive(tmp_path, retries=0).fetch("retry", "https://example.org")
+    assert not sleeps
+    saved = json.loads((tmp_path / "retry.json").read_text())
+    assert saved["retry_not_before"] == 1030
+    assert saved["response_headers"]["X-RateLimit-Limit"] == "200"
+    monkeypatch.setattr(module.urllib.request, "urlopen", lambda *a, **k: io.BytesIO(b'{"data":[]}'))
+    assert Archive(tmp_path).fetch("retry", "https://example.org")["status"] == "ok"
+    assert sleeps == [30]
