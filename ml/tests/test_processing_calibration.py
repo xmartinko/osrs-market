@@ -75,6 +75,10 @@ def test_partial_production_reconciles_cash_book_cost_actual_tax_and_capital_tim
     assert r["peak_book_gp"] == 1200
     assert r["book_gp_seconds"] == 1000 * 100 + 1200 * 200 + 480 * 190
     assert r["orders"][0]["filled_units"] == 10
+    assert r["orders"][0]["average_fill_gp"] == 100
+    assert r["orders"][0]["fill_fraction"] == 1
+    assert r["orders"][2]["tax_gp"] == 18
+    assert r["orders"][2]["cash_delta_gp"] == 882
     assert r["orders"][0]["first_fill_wait_seconds"] == 10
     assert r["deviations"] == []
     assert not r["ready"]
@@ -283,3 +287,34 @@ def test_no_implicit_ledger_creation_and_clock_cannot_move_backwards(study):
         import_events(path, [], now=m["start"] + 500)
     with pytest.raises(FileNotFoundError):
         import_events(path.parent / "missing.sqlite", [], now=m["end"])
+
+
+def test_excess_slots_budget_and_expired_buy_are_retained(study):
+    path, m, ev, template = study
+    decision = deepcopy(template[0])
+    decision["data"]["quantity"] = 10000
+    import_events(path, [decision], now=m["start"] + 10)
+    records = [ev(f"s{j}", "submit", dict(order_id=f"o{j}", batch_id="b", item_id=70,
+                  side="buy", quantity=1, price_gp=100), 100 + j) for j in range(9)]
+    records.append(ev("expired", "cancel", dict(order_id="o0", reason="late cancel"),
+                      3 * DAY + 101))
+    r = import_events(path, records, now=m["start"] + 4 * DAY)
+    assert {d["reason"] for d in r["deviations"]} >= {
+        "slots", "batch_budget", "buy_expiry", "production_rate"}
+    assert r["peak_open_slots"] == 9 and r["cancellations"] == 1
+    assert r["event_count"] == len(records) + 1
+
+
+def test_buy_limit_resets_after_four_hours(study):
+    path, m, ev, template = study
+    decision = deepcopy(template[0])
+    decision["data"]["buy_limits"]["70"] = 10
+    import_events(path, [decision], now=m["start"] + 10)
+    records = template[1:4]
+    records += [ev("new", "submit", dict(order_id="new", batch_id="b", item_id=70,
+                   side="buy", quantity=10, price_gp=100), 14400 + 111),
+                ev("again", "fill", dict(order_id="new", quantity=10, price_gp=100,
+                                          tax_gp=0), 14400 + 120)]
+    r = import_events(path, records, now=m["start"] + 15000)
+    assert "buy_limit" not in {d["reason"] for d in r["deviations"]}
+    assert r["buy_units"] == 20

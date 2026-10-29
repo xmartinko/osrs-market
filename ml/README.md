@@ -91,6 +91,49 @@ The independent audit checks source-priced fills, conversion inventory, cash,
 limits, slots, timing, participation, marks and complete-family reporting.
 All ledgers, the full aggregate CSVs and bootstrap diagnostics stay outside Git.
 
+## Processing actual-fill calibration
+
+The [frozen measurement protocol](../docs/processing-own-fill-protocol.md) follows
+processing attribution. This offline ledger sends no orders and reads no market
+archive. It accepts only explicitly supplied operator records, verifies evidence
+hashes, replays inventory/cash and retains failed attempts and protocol deviations.
+There is no profit significance test; the old battery adjusted p=1 is unchanged.
+
+```bash
+export OSRS_DATA_DIR=/home/martin/osrs-data
+ml/.venv/bin/python -m osrs_ml.processing_calibration init \
+  --study "$OSRS_DATA_DIR/processing-own-fill-v1" --acknowledge-private-research
+ml/.venv/bin/python -m osrs_ml.processing_calibration report \
+  --study "$OSRS_DATA_DIR/processing-own-fill-v1" --acknowledge-private-research
+```
+
+Initialize once. Enrollment freezes protocol/code hashes and a 56-day window
+starting at the next UTC midnight. Existing studies cannot be overwritten or
+silently migrated after code changes. An empty study reports missing actual
+records and unidentified expected profit.
+
+For later operator-supplied records, put evidence files and JSONL events **inside**
+the study directory, using the exact event schema in the protocol. Import each
+positive decision before any corresponding order submission. Import actual
+submissions, cancellations, fills, production and the daily final session check:
+
+```bash
+ml/.venv/bin/python -m osrs_ml.processing_calibration import \
+  --study "$OSRS_DATA_DIR/processing-own-fill-v1" \
+  --events "$OSRS_DATA_DIR/processing-own-fill-v1/events.jsonl" \
+  --acknowledge-private-research
+```
+
+Imports are atomic and duplicate IDs fail rather than being ignored. Session
+checks must follow all that UTC day's interactions. Amendments cancel an old
+order and submit a new ID. Reported cash must satisfy realized profit minus
+remaining book cost; leftover inventory has no invented liquidation price.
+Readiness requires complete daily records, ten completed batches, no open orders,
+no residual inventory and no recorded envelope deviations after the fixed window.
+It establishes calibration completeness only. Evidence authenticity, unrecorded
+activity and candidate selection still require operator audit; a separately
+registered prospective trial is needed for an expected-profit claim.
+
 ## Original harness usage
 
 From the repository root, with `uv` installed:

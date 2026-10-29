@@ -117,3 +117,18 @@ must freeze policy, adequate temporal sample, empirical block-bootstrap lengths,
 search-family correction including the selection history, and a primary after-cost
 endpoint before its observations. Calibration cannot itself establish positive
 expected profit. Do not tune a failing strategy to these calibration outcomes.
+
+## Intake implementation clarification — before any actual observations
+
+A decision ingested after its first submission timestamp is retained and flagged
+`decision_recorded_after_submission`. To preserve durable selection, import the
+decision before submitting orders; actual fill exports may be imported later.
+A daily session with interactions but zero recorded active seconds is a retained
+`missing_active_time` deviation. Buy expiry is checked at fills, order closure
+and reports. The report also exposes each order's actual notional, tax, cash,
+weighted fill price and fill fraction. These are descriptive measurements.
+
+Candidate choice, skill eligibility, completeness of operator exports and the
+meaning/authenticity of evidence require manual audit. The readiness gate checks
+recorded accounting and completeness; it cannot certify those external facts.
+No raw-data analysis or profit inference preceded this clarification.

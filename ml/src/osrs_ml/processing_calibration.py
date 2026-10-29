@@ -220,6 +220,7 @@ def replay(manifest, events, path, now, ingestion):
                                if o["item_id"] == item and o["side"] == "sell")
                 require(q + reserved <= stock.get(item, 0), "Unowned sale submission")
             orders[order_id] = dict(**data, submitted_at=at, filled_units=0, status="open",
+                                    filled_notional_gp=0, tax_gp=0, cash_delta_gp=0,
                                     first_fill_at=None, last_fill_at=None, closed_at=None)
             counts["submissions"] += 1
             peak_slots = max(peak_slots, len(live()))
@@ -259,6 +260,9 @@ def replay(manifest, events, path, now, ingestion):
                     "Fill violates order price limit")
             require(paid_tax == 0 if buy else paid_tax <= price * q, "Invalid actual tax")
             order["filled_units"] += q
+            order["filled_notional_gp"] += price * q
+            order["tax_gp"] += paid_tax
+            order["cash_delta_gp"] += -price * q if buy else price * q - paid_tax
             order["first_fill_at"] = order["first_fill_at"] or at
             order["last_fill_at"] = at
             if buy:
@@ -359,7 +363,10 @@ def replay(manifest, events, path, now, ingestion):
                 realized_gp_per_recorded_active_hour=realized * 3600 / active if active else None,
                 active_time_complete=(len(sessions) == 56), peak_open_slots=peak_slots,
                 peak_book_gp=peak_book, book_gp_seconds=capital_time, deviations=deviations,
-                orders=[dict(o, first_fill_wait_seconds=(o["first_fill_at"] - o["submitted_at"]
+                orders=[dict(o, fill_fraction=o["filled_units"] / o["quantity"],
+                             average_fill_gp=(o["filled_notional_gp"] / o["filled_units"]
+                                              if o["filled_units"] else None),
+                             first_fill_wait_seconds=(o["first_fill_at"] - o["submitted_at"]
                               if o["first_fill_at"] is not None else None)) for o in orders.values()],
                 **counts, expected_profit_gp=None, marked_profit_gp=None, participation=None,
                 p_adjusted=None, historical_battery_p_adjusted=1.0, holdout_read=False,
