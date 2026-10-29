@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "kind": "development_mean_screen_and_conditional_alchemy_cap_only",
+  "holdout_start": 1785024300,
+  "start": 1777766700,
+  "candidates": {"855": 768, "859": 1536, "19580": 810, "19582": 1170},
+  "nature_rune_id": 561,
+  "cash_gp": 10000000,
+  "batch_budget_gp": 1000000,
+  "daily_casts": 916,
+  "casts_per_hour": 1000,
+  "setup_seconds": 300,
+  "staff_gp": 1500,
+  "active_value_gp_per_hour": 100000,
+  "participation_bps": 100,
+  "adverse_bps": 10,
+  "next_battery": {
+    "hypotheses": ["direct_alchemy", "string_magic_sell", "string_yew_sell", "string_magic_alchemy"],
+    "days": 56,
+    "input_timeout_hours": 72,
+    "final_no_entry_days": 7,
+    "blocks_days": [7, 14],
+    "draws": 20000,
+    "seed": 42,
+    "minimum_completed_per_arm": 10,
+    "bonferroni_family_size": 217,
+    "actual_records_required": true
+  }
+}
