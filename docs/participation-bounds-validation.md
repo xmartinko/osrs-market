@@ -265,6 +265,16 @@ complete sealed development replay, overwrite refusal, changed inputs, durable
 interruption, ledger corruption and cache equivalence. Fixtures establish mechanics
 only; all market tables above come from the real development replay.
 
+A separate real-data regression replay also used only saved development scores
+and compared all three prior corrected presets, five models and three folds
+against `/home/martin/osrs-data/execution-price-correction-v2`. It checked net GP,
+realized GP, ending cash, inventory mark/units, requested buys and bought/sold
+units. Actual output (exit 0), saved in `.regression.log`:
+
+```text
+PASS: 45 prior corrected preset/model/fold combinations reproduced on all 8 accounting/exposure metrics; default bucket_proxy_v1 unchanged; holdout NOT read.
+```
+
 The reproducible summary command was also executed (exit 0):
 
 ```bash
