@@ -1,9 +1,54 @@
 # OSRS ML research harness
 
-Phase 1 is an executable Python 3.13 research component alongside the existing C++ pipeline.
-The [implementation and orchestration plan](../docs/ml-implementation-plan.md) describes the
-foundation-model tournament, separate model environments and live forward evaluation.
-There is no new collector, database schema, scheduler or automatic trading integration.
+This Python 3.13 research component runs alongside the existing C++ pipeline. Phase 2
+added a daily experiment and a prospective Wiki archive/paper ledger with user timers.
+The [post-phase-2 assessment](../docs/next-steps.md) defers the foundation-model tournament
+until execution assumptions can be tested. There are no C++ schema changes or automatic trades.
+
+## Diagnose execution on frozen development predictions
+
+From the repository root, replay an existing completed daily experiment:
+
+```bash
+export OSRS_DATA_DIR=/home/martin/osrs-data
+uv run --project ml --frozen osrs-ml diagnose-execution \
+  --panel "$OSRS_DATA_DIR/assembled-v3/daily.parquet" \
+  --development-run ml/runs/phase2-real-v1 \
+  --output "$OSRS_DATA_DIR/execution-diagnostics-new"
+```
+
+Use a new output directory. The command reads only the saved development forecast/metric
+paths and filters panel observations to each recorded development fold before loading them.
+It trains no models and does not select parameters or open holdout artifacts. It checks
+panel/config/dependency hashes, decision-key coverage and original-preset P&L/quantity
+reproduction. Undefined saved scores are retained only where required prices are missing
+or inverted. They remain ineligible for trading, as in the original executor.
+
+All five models face 19 fixed scenarios: the three original presets, seven one-factor
+changes from optimistic to moderate, moderate with passive prices restored, and a grid
+of 0/5/10/30 bps slippage per side under passive and crossed pricing. Some scenarios
+intentionally duplicate policies as consistency checks. Factors interact: changes in
+GP across one-factor replays are not an additive attribution of the preset difference.
+
+`run.json` records input/code hashes, every policy, completion count and status.
+Every completed replay publishes fills, orders, equity and metrics, so partial runs
+retain evidence. Only `status=complete` certifies the full grid and original-preset
+reproduction. Existing outputs cannot be overwritten; failed attempts remain visible.
+`results.parquet`/`results.csv` report per-fold P&L, actual tax charged in the simulation,
+fill events, bought/sold units, terminal inventory and zero-buy/inventory-only status.
+Input-gate counts overlap and do not attribute dynamic cash or slot rejections.
+
+`fixed_fill_repricing.csv` and per-model repricing ledgers hold the optimistic quantities,
+times and terminal inventory mark fixed while changing buys to high and sales to low,
+recomputing per-item tax. This is an accounting counterfactual that can violate cash,
+capacity and order ceilings; it is not another executable portfolio. Missing crossed
+prices produce an incomplete diagnostic rather than invented prices.
+
+Every output remains **current_limits_sensitivity**, with hypothetical aggregate fills
+and historical capacity lookahead. Neither positive GP nor zero-buy GP demonstrates
+live profitability. See the assessment for the calibration and prospective evaluation gates.
+
+## Original harness usage
 
 From the repository root, with `uv` installed:
 

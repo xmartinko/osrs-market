@@ -7,7 +7,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-
 from osrs_ml.backtest import BacktestResult, simulate
 from osrs_ml.data import manifest, sha256
 from osrs_ml.diagnostics import (
