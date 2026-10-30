@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
-USER_AGENT = 'osrs-market-research/0.1 (personal research; contact noreply@example.invalid)'
+USER_AGENT = 'osrs-market-research/0.1 (private personal research; no contact address)'
 
 
 def atomic_json(path, value):
@@ -28,19 +28,26 @@ class FetchError(RuntimeError):
 
 
 class Client:
-    def __init__(self, root, *, interval=1.05, retries=3):
+    def __init__(self, root, *, interval=1.05, retries=3, host_locks=None):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
-        self.interval = max(1.0, interval)
+        self.interval = max(1.05, interval)
         self.retries = retries
+        self.host_locks = Path(host_locks) if host_locks else self.root.parent / '.http-hosts'
         self.session = httpx.Client(headers={'User-Agent': USER_AGENT}, timeout=90,
                                     follow_redirects=False)
 
-    def fetch(self, url, *, refresh=False):
+    def fetch(self, url, *, refresh=False, headers=None, private=False):
+        # Credentialed requests never reuse anonymous cache entries or archive raw
+        # bodies/cookies. The caller validates and publishes only market data.
+        if headers and not private:
+            raise ValueError('Request headers require private evidence mode')
+        if headers and any(k.lower() == 'user-agent' for k in headers):
+            raise ValueError('User-Agent cannot be overridden')
         key = hashlib.sha256(url.encode()).hexdigest()
         meta = self.root / f'{key}.json'
         body = self.root / f'{key}.body'
-        if meta.exists() and not refresh:
+        if meta.exists() and not refresh and not private:
             record = json.loads(meta.read_text())
             body = self.root / record.get('body_file', body.name)
             if record['status'] == 200 and body.exists():
@@ -52,8 +59,9 @@ class Client:
                 raise FetchError(f"Cached HTTP {record['status']} {url}; evidence={meta}",
                                  status=record['status'])
         host = urlsplit(url).hostname
-        lockpath = self.root.parent / '.http-hosts'
-        lockpath.mkdir(exist_ok=True)
+        request_headers = headers
+        lockpath = self.host_locks
+        lockpath.mkdir(parents=True, exist_ok=True)
         for attempt in range(self.retries + 1):
             with (lockpath / f'{host}.lock').open('a+') as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX)
@@ -63,10 +71,19 @@ class Client:
                 started = time.time()
                 status, headers, error = 0, {}, None
                 try:
-                    response = self.session.get(url)
+                    self.session.cookies.clear()
+                    response = self.session.get(url, headers=request_headers)
+                    self.session.cookies.clear()
                     status, headers, content = response.status_code, dict(response.headers), response.content
+                    headers = {k: v for k, v in headers.items()
+                               if k.lower() not in ('set-cookie', 'authorization', 'proxy-authenticate')}
+                    if private:
+                        headers = {k: v for k, v in headers.items() if k.lower() in
+                                   ('content-type', 'date', 'retry-after', 'x-ratelimit-limit',
+                                    'x-ratelimit-remaining', 'x-ratelimit-reset')}
                 except httpx.HTTPError as exc:
-                    error, content = str(exc), str(exc).encode()
+                    error = type(exc).__name__ if private else str(exc)
+                    content = error.encode()
                 delay = self.interval
                 if status == 429 or status >= 500 or not status:
                     delay = max(delay, min(120, 2 ** (attempt + 2)) + random.uniform(0, 1))
@@ -86,12 +103,16 @@ class Client:
                               sha256=hashlib.sha256(content).hexdigest())
                 # Preserve every actual response, including retries and fresh collections.
                 evidence = self.root / f'{key}-{time.time_ns()}'
-                evidence.with_suffix('.body').write_bytes(content)
-                record['body_file'] = evidence.with_suffix('.body').name
+                if private:
+                    record['body_archived'] = False
+                else:
+                    evidence.with_suffix('.body').write_bytes(content)
+                    record['body_file'] = evidence.with_suffix('.body').name
                 atomic_json(evidence.with_suffix('.json'), record)
                 # Only the lookup index changes. Payloads, including the original
                 # legacy cache body, are immutable; refresh never destroys evidence.
-                atomic_json(meta, record)
+                if not private:
+                    atomic_json(meta, record)
             if status == 200:
                 return content, record
             if status not in (429,) and status < 500 and status != 0:
@@ -127,8 +148,8 @@ class Client:
             try:
                 for _ in range(6):
                     host = urlsplit(current).hostname
-                    locks = self.root.parent / '.http-hosts'
-                    locks.mkdir(exist_ok=True)
+                    locks = self.host_locks
+                    locks.mkdir(parents=True, exist_ok=True)
                     with (locks / f'{host}.lock').open('a+') as lock:
                         fcntl.flock(lock, fcntl.LOCK_EX)
                         clock = locks / f'{host}.json'

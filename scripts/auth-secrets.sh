@@ -87,7 +87,7 @@ write_bootstrap_file()
         "${fusionauth_bootstrap_file}"
 
     printf '%s\n' \
-        'FUSIONAUTH_ADMIN_EMAIL=admin@osrs-market.local' \
+        'FUSIONAUTH_ADMIN_EMAIL=admin@example.invalid' \
         'FUSIONAUTH_PUBLIC_URL=http://localhost:9011' \
         'FRONTEND_URL=http://localhost:5173' \
         'FUSIONAUTH_REDIRECT_URI=http://localhost:5173/auth/callback' \
