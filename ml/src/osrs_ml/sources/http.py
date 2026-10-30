@@ -42,6 +42,7 @@ class Client:
         body = self.root / f'{key}.body'
         if meta.exists() and not refresh:
             record = json.loads(meta.read_text())
+            body = self.root / record.get('body_file', body.name)
             if record['status'] == 200 and body.exists():
                 content = body.read_bytes()
                 if hashlib.sha256(content).hexdigest() != record['sha256']:
@@ -50,7 +51,7 @@ class Client:
             if record['status'] in (401, 403, 404, 410, 451):
                 raise FetchError(f"Cached HTTP {record['status']} {url}; evidence={meta}",
                                  status=record['status'])
-        host = urlsplit(url).netloc
+        host = urlsplit(url).hostname
         lockpath = self.root.parent / '.http-hosts'
         lockpath.mkdir(exist_ok=True)
         for attempt in range(self.retries + 1):
@@ -86,8 +87,10 @@ class Client:
                 # Preserve every actual response, including retries and fresh collections.
                 evidence = self.root / f'{key}-{time.time_ns()}'
                 evidence.with_suffix('.body').write_bytes(content)
+                record['body_file'] = evidence.with_suffix('.body').name
                 atomic_json(evidence.with_suffix('.json'), record)
-                body.write_bytes(content)
+                # Only the lookup index changes. Payloads, including the original
+                # legacy cache body, are immutable; refresh never destroys evidence.
                 atomic_json(meta, record)
             if status == 200:
                 return content, record
@@ -115,13 +118,15 @@ class Client:
             if digest.hexdigest() != record['sha256']:
                 raise ValueError('Download checksum mismatch')
             return record
+        if path.exists():
+            raise FileExistsError(f'Refusing to replace an existing download without provenance: {path}')
         original_url = url
         pending = path.with_suffix(path.suffix + '.partial')
         for attempt in range(self.retries + 1):
             current = original_url
             try:
                 for _ in range(6):
-                    host = urlsplit(current).netloc
+                    host = urlsplit(current).hostname
                     locks = self.root.parent / '.http-hosts'
                     locks.mkdir(exist_ok=True)
                     with (locks / f'{host}.lock').open('a+') as lock:

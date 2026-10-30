@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 
 from .http import atomic_json
-from .storage import canonical, completed, publish
+from .storage import canonical, completed, publish, snapshot_name
 
 BASE = 'https://prices.runescape.wiki/api/v2/osrs'
 REGIME_BREAK = 1790726400  # 2026-09-30 00:00 UTC: RuneLite -> Jagex, all clients.
@@ -77,7 +77,7 @@ def bulk(client, root, mapping, *, resolution='5m', start=None, end=None):
 def timeseries(client, root, mapping, *, ids=None, lookback='6h', snapshot=None):
     names = {int(m['id']): m['name'] for m in mapping}
     ids = sorted(names) if ids is None else ids
-    snapshot = snapshot or datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    snapshot = snapshot_name(snapshot or datetime.now(timezone.utc).strftime('%Y-%m-%d'))
     results = []
     for item_id in ids:
         path = root / 'wiki-v2' / 'timeseries' / lookback / snapshot / f'{item_id}.parquet'

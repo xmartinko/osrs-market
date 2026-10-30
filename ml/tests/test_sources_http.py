@@ -61,7 +61,7 @@ def test_http_ua_shared_host_throttle_and_cache(tmp_path, fake_time):
     install_transport(a, handler)
     install_transport(b, handler)
     a.json('https://example.org/a')
-    b.json('https://example.org/b')
+    b.json('https://example.org:443/b')  # same host despite an explicit default port
     a.json('https://example.org/a')
     assert len(calls) == 2 and calls[1] - calls[0] >= 1
     assert list(a.root.glob('*.body'))
@@ -167,3 +167,33 @@ def test_throttle_spaces_starts_and_keeps_retry_backoff_after_response(tmp_path,
     client.json('https://example.org/first')
     client.json('https://example.org/second')
     assert 1.0 <= starts[1] - starts[0] <= 1.1
+
+
+def test_refresh_preserves_original_payload_evidence(tmp_path, fake_time):
+    client = http.Client(tmp_path / 'http')
+    calls = []
+    def handler(request):
+        calls.append(1)
+        return httpx.Response(200, json={'revision': len(calls)})
+    install_transport(client, handler)
+    _, first = client.json('https://example.org/data')
+    _, second = client.json('https://example.org/data', refresh=True)
+    assert first['body_file'] != second['body_file']
+    assert json.loads((client.root / first['body_file']).read_text()) == {'revision': 1}
+    assert client.json('https://example.org/data')[0] == {'revision': 2}
+    assert len(calls) == 2
+
+
+def test_download_refuses_to_overwrite_orphan_existing_file(tmp_path):
+    client = http.Client(tmp_path / 'http')
+    path = tmp_path / 'archive.zip'
+    path.write_bytes(b'existing original bytes')
+    with pytest.raises(FileExistsError, match='Refusing'):
+        client.download('https://example.org/archive', path)
+    assert path.read_bytes() == b'existing original bytes'
+
+
+@pytest.mark.parametrize('name', ['../forward', '/tmp/data', 'a/b', 'a\\b', '..', '.'])
+def test_snapshot_names_cannot_escape_research_partition(name):
+    with pytest.raises(ValueError, match='single'):
+        storage.snapshot_name(name)

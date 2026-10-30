@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 import pyarrow as pa
 
 from .http import atomic_json
-from .storage import completed, publish
+from .storage import completed, publish, snapshot_name
 
 BASE = 'https://oldschool.runescape.wiki/api.php'
 SCHEMA = pa.schema([('page_id', pa.int64()), ('title', pa.string()),
@@ -75,7 +75,7 @@ def revisions(client, root, mapping, *, ids=None):
 
 
 def pages(client, root, mapping, *, modules=False, snapshot=None):
-    snapshot = snapshot or datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    snapshot = snapshot_name(snapshot or datetime.now(timezone.utc).strftime('%Y-%m-%d'))
     kind = 'modules' if modules else 'items'
     directory = root / 'wiki-pages' / snapshot / kind
     results = []

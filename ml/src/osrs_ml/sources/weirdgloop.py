@@ -3,7 +3,7 @@ import json
 from datetime import datetime, timezone
 
 from .http import FetchError, atomic_json
-from .storage import canonical, completed, publish
+from .storage import canonical, completed, publish, snapshot_name
 
 BASE = 'https://api.weirdgloop.org/exchange'
 
@@ -37,7 +37,7 @@ def run(client, root, mapping, *, kind='all', limit=None, snapshot=None):
             existing = sorted((root / 'weirdgloop-all').glob('*/checkpoint.json'),
                               key=lambda p: -len(json.loads(p.read_text())))
         snapshot = existing[0].parent.name if existing else None
-    snapshot = snapshot or datetime.now(timezone.utc).strftime('%Y-%m-%d')
+    snapshot = snapshot_name(snapshot or datetime.now(timezone.utc).strftime('%Y-%m-%d'))
     directory = root / f'weirdgloop-{kind}' / snapshot
     directory.mkdir(parents=True, exist_ok=True)
     checkpoint = directory / 'checkpoint.json'

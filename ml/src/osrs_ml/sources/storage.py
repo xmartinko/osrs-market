@@ -1,5 +1,7 @@
 """Immutable partitions and checksum manifests, reusing the existing manifest writer."""
+import fcntl
 import json
+import re
 from pathlib import Path
 
 import pyarrow as pa
@@ -14,6 +16,12 @@ CANONICAL = pa.schema([
     ('mid_price', pa.float64()), ('total_volume', pa.int64()),
     ('source', pa.string()), ('economy', pa.string()), ('source_extra', pa.string()),
 ])
+
+
+def snapshot_name(value):
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]*', value):
+        raise ValueError('Snapshot must be a single alphanumeric/dash/underscore path component')
+    return value
 
 
 def external_root(root):
@@ -50,6 +58,14 @@ def completed(path):
 def publish(path, rows, *, source, record, schema=CANONICAL, **extras):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    # Forward collection and historical repair can meet at a bucket. Serialize the
+    # immutable parquet+manifest publication, including recovery after a crash.
+    with path.with_suffix('.publish.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        return _publish(path, rows, source=source, record=record, schema=schema, **extras)
+
+
+def _publish(path, rows, *, source, record, schema, **extras):
     if completed(path):
         return json.loads(path.with_suffix('.manifest.json').read_text())
     if path.exists():
