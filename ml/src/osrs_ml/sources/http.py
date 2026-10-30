@@ -22,7 +22,9 @@ def atomic_json(path, value):
 
 
 class FetchError(RuntimeError):
-    pass
+    def __init__(self, message, *, status=None):
+        super().__init__(message)
+        self.status = status
 
 
 class Client:
@@ -46,7 +48,8 @@ class Client:
                     raise ValueError(f'HTTP cache checksum mismatch: {body}')
                 return content, record
             if record['status'] in (401, 403, 404, 410, 451):
-                raise FetchError(f"Cached HTTP {record['status']} {url}; evidence={meta}")
+                raise FetchError(f"Cached HTTP {record['status']} {url}; evidence={meta}",
+                                 status=record['status'])
         host = urlsplit(url).netloc
         lockpath = self.root.parent / '.http-hosts'
         lockpath.mkdir(exist_ok=True)
@@ -56,6 +59,7 @@ class Client:
                 clock = lockpath / f'{host}.json'
                 previous = json.loads(clock.read_text()) if clock.exists() else {}
                 time.sleep(max(0, previous.get('next', 0) - time.time()))
+                started = time.time()
                 status, headers, error = 0, {}, None
                 try:
                     response = self.session.get(url)
@@ -71,8 +75,11 @@ class Client:
                             delay = max(delay, float(retry_after))
                         except ValueError:
                             delay = max(delay, parsedate_to_datetime(retry_after).timestamp() - time.time())
-                atomic_json(clock, {'next': time.time() + delay})
+                next_request = (time.time() + delay if status == 429 or status >= 500
+                                or not status else started + self.interval)
+                atomic_json(clock, {'next': next_request})
                 record = dict(url=url, status=status, headers=headers, error=error,
+                              started_at=datetime.fromtimestamp(started, timezone.utc).isoformat(),
                               fetched_at=datetime.now(timezone.utc).isoformat(),
                               user_agent=USER_AGENT, bytes=len(content), attempt=attempt,
                               sha256=hashlib.sha256(content).hexdigest())
@@ -86,7 +93,7 @@ class Client:
                 return content, record
             if status not in (429,) and status < 500 and status != 0:
                 break
-        raise FetchError(f'HTTP {status} {url}; evidence={meta}')
+        raise FetchError(f'HTTP {status} {url}; evidence={meta}', status=status)
 
     def json(self, url, **kwargs):
         content, record = self.fetch(url, **kwargs)
@@ -133,10 +140,12 @@ class Client:
                             offset = 0
                         headers = ({'Range': f'bytes={offset}-', 'If-Range': validator}
                                    if offset else {})
+                        started = time.time()
                         with self.session.stream('GET', current, headers=headers) as response:
                             status = response.status_code
                             record = dict(url=current, original_url=original_url, status=status,
                                           headers=dict(response.headers), user_agent=USER_AGENT,
+                                          started_at=datetime.fromtimestamp(started, timezone.utc).isoformat(),
                                           fetched_at=datetime.now(timezone.utc).isoformat())
                             key = hashlib.sha256(current.encode()).hexdigest()
                             atomic_json(self.root / f'{key}-{time.time_ns()}.json', record)
@@ -151,7 +160,9 @@ class Client:
                                         delay = max(delay, parsedate_to_datetime(value).timestamp()
                                                     - time.time())
                             # Reserve the host on both success and failed transfers.
-                            atomic_json(clock, {'next': time.time() + delay})
+                            next_request = (time.time() + delay if status == 429 or status >= 500
+                                            else started + self.interval)
+                            atomic_json(clock, {'next': next_request})
                             if status in (301, 302, 303, 307, 308):
                                 from urllib.parse import urljoin
                                 current = urljoin(current, response.headers['location'])
@@ -161,7 +172,7 @@ class Client:
                             if status not in (200, 206):
                                 error_body = response.read()
                                 (self.root / f'{key}-{time.time_ns()}.body').write_bytes(error_body)
-                                raise FetchError(f'HTTP {status} {original_url}')
+                                raise FetchError(f'HTTP {status} {original_url}', status=status)
                             if status == 206 and not response.headers.get('content-range', '').startswith(
                                     f'bytes {offset}-'):
                                 raise FetchError('Invalid Content-Range')
@@ -173,12 +184,13 @@ class Client:
                                 total = response.headers['content-range'].rsplit('/', 1)[1]
                                 if total != '*' and pending.stat().st_size != int(total):
                                     raise httpx.ReadError('Incomplete resumed download')
-                            atomic_json(clock, {'next': time.time() + self.interval})
+                            atomic_json(clock, {'next': started + self.interval})
                         digest = hashlib.sha256()
                         with pending.open('rb') as stream:
                             for chunk in iter(lambda: stream.read(1024 * 1024), b''):
                                 digest.update(chunk)
-                        record.update(sha256=digest.hexdigest(), bytes=pending.stat().st_size)
+                        record.update(sha256=digest.hexdigest(), bytes=pending.stat().st_size,
+                                      download_completed_at=datetime.now(timezone.utc).isoformat())
                         pending.rename(path)
                         atomic_json(metadata, record)
                         return record

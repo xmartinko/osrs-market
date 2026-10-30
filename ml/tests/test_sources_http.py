@@ -154,3 +154,16 @@ def test_wg_interruption_resume_and_rolling_deduplication(tmp_path):
     state = json.loads((tmp_path / 'weirdgloop-all/failed/checkpoint.json').read_text())
     assert state['561']['status'] == 'error'
 
+
+
+def test_throttle_spaces_starts_and_keeps_retry_backoff_after_response(tmp_path, fake_time):
+    starts = []
+    def handler(request):
+        starts.append(fake_time[0])
+        fake_time[0] += 0.4  # recorded transport latency, while the host lock is held
+        return httpx.Response(200, json={'ok': True})
+    client = http.Client(tmp_path / 'http')
+    install_transport(client, handler)
+    client.json('https://example.org/first')
+    client.json('https://example.org/second')
+    assert 1.0 <= starts[1] - starts[0] <= 1.1

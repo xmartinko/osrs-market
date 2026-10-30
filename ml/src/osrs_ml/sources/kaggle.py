@@ -14,7 +14,7 @@ def run(client, root, mapping):
     archive = directory / 'raw' / 'dataset-v1.zip'
     record = client.download(f'https://www.kaggle.com/api/v1/datasets/download/{REF}?datasetVersionNumber=1',
                              archive)
-    checkpoint = directory / 'checkpoint.json'
+    checkpoint = directory / 'checkpoint-v2.json'
     state = json.loads(checkpoint.read_text()) if checkpoint.exists() else {}
     with zipfile.ZipFile(archive) as z:
         for member in z.infolist():
@@ -32,9 +32,15 @@ def run(client, root, mapping):
                     shutil.copyfileobj(source, target, length=1024*1024)
                 pending.rename(raw)
             if member.filename.startswith('prices_5m/') and member.filename.endswith('.parquet'):
-                output = directory / 'canonical' / member.filename
-                result = normalize(raw, output, record=record, source='kaggle-5m', mapping=mapping,
-                                   timestamp_scale=300)
-                state[member.filename] = result
+                main = normalize(raw, directory / 'canonical-v2/main' / member.filename,
+                                 record=record, source='kaggle-5m', mapping=mapping,
+                                 timestamp_scale=300, item_filter='listed')
+                quarantine = normalize(
+                    raw, directory / 'canonical-v2/unclassified_legacy' / member.filename,
+                    record=record, source='kaggle-5m', mapping=mapping, timestamp_scale=300,
+                    item_filter='unlisted', economy='unclassified_legacy')
+                state[member.filename] = dict(main=main, unclassified_legacy=quarantine)
                 atomic_json(checkpoint, state)
-    return dict(source='kaggle-5m', partitions=len(state), rows=sum(r['rows'] for r in state.values()))
+    return dict(source='kaggle-5m', partitions=len(state),
+                rows=sum(r['main']['rows']+r['unclassified_legacy']['rows'] for r in state.values()),
+                unclassified_rows=sum(r['unclassified_legacy']['rows'] for r in state.values()))

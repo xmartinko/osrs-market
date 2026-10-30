@@ -8,7 +8,7 @@ from .storage import canonical, completed, publish
 BASE = 'https://api.weirdgloop.org/exchange'
 
 
-def adapt(payload, item_id, name=None, kind='all'):
+def adapt(payload, item_id, name=None, kind='all', economy='main'):
     if not isinstance(payload, dict) or str(item_id) not in payload:
         raise ValueError(f'Application error for {item_id}: {str(payload)[:300]}')
     rows, seen = [], set()
@@ -23,7 +23,7 @@ def adapt(payload, item_id, name=None, kind='all'):
             raise ValueError('Duplicate source timestamp')
         seen.add(ts)
         rows.append(canonical(item_id, name, ts, source=f'weirdgloop-{kind}',
-                              mid=point['price'], volume=point.get('volume'), extra=point))
+                              mid=point['price'], volume=point.get('volume'), economy=economy, extra=point))
     return sorted(rows, key=lambda r: r['ts'])
 
 
@@ -32,7 +32,10 @@ def run(client, root, mapping, *, kind='all', limit=None, snapshot=None):
         raise ValueError(kind)
     # Explicit snapshot allows rolling polls while rerunning the same snapshot resumes.
     if snapshot is None and kind == 'all':
-        existing = sorted((root / 'weirdgloop-all').glob('*/checkpoint.json'))
+        existing = sorted((root / 'weirdgloop-all').glob('????-??-??/checkpoint.json'))
+        if not existing:
+            existing = sorted((root / 'weirdgloop-all').glob('*/checkpoint.json'),
+                              key=lambda p: -len(json.loads(p.read_text())))
         snapshot = existing[0].parent.name if existing else None
     snapshot = snapshot or datetime.now(timezone.utc).strftime('%Y-%m-%d')
     directory = root / f'weirdgloop-{kind}' / snapshot
@@ -45,7 +48,13 @@ def run(client, root, mapping, *, kind='all', limit=None, snapshot=None):
     for n, item in enumerate(entries, 1):
         item_id = int(item['id'])
         path = directory / 'items' / f'{item_id}.parquet'
-        if completed(path) or progress.get(str(item_id), {}).get('status') == 'empty':
+        if completed(path):
+            if progress.get(str(item_id), {}).get('status') != 'complete':
+                metadata = json.loads(path.with_suffix('.manifest.json').read_text())
+                progress[str(item_id)] = dict(status='complete', **metadata)
+                atomic_json(checkpoint, progress)
+            continue
+        if progress.get(str(item_id), {}).get('status') == 'empty':
             continue
         url = f'{BASE}/history/osrs/{kind}?id={item_id}'
         try:
@@ -54,7 +63,7 @@ def run(client, root, mapping, *, kind='all', limit=None, snapshot=None):
                 progress[str(item_id)] = dict(status='empty', rows=0, endpoint=url,
                                               fetched_at=record['fetched_at'], evidence=record)
             else:
-                rows = adapt(payload, item_id, item['name'], kind)
+                rows = adapt(payload, item_id, item['name'], kind, economy=item.get('economy', 'main'))
                 raw_rows = len(rows)
                 if kind == 'last90d':
                     import pyarrow.parquet as pq
@@ -78,3 +87,22 @@ def run(client, root, mapping, *, kind='all', limit=None, snapshot=None):
                                   last_item=item_id)), flush=True)
     return dict(source=f'weirdgloop-{kind}', items=len(progress),
                 rows=sum(v['rows'] for v in progress.values()), path=str(directory))
+
+
+def archive_only(client, root, mapping=None, *, snapshot=None):
+    """Inspect the frozen mirror's unclassified IDs without assigning a main market."""
+    import pyarrow.parquet as pq
+
+    from .columnar import connect
+
+    paths = sorted((root / 'kaggle-5m/canonical-v2/unclassified_legacy').rglob('*.parquet'))
+    if len(paths) != 68:
+        raise ValueError('Complete classified mirror conversion required')
+    with connect() as db:
+        ids = [row[0] for row in db.execute('SELECT DISTINCT item_id FROM read_parquet(?)',
+                                           [[str(p) for p in paths]]).fetchall()]
+    names = {r['itemId']: r['name'] for r in
+             pq.read_table(root / 'kaggle-5m/raw/items.parquet').to_pylist()}
+    items = [dict(id=i, name=names.get(i), economy='unclassified_legacy') for i in sorted(ids)]
+    snapshot = snapshot or datetime.now(timezone.utc).strftime('%Y-%m-%d')+'-archive-only'
+    return run(client, root, items, snapshot=snapshot)

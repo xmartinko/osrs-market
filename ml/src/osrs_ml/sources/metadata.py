@@ -53,7 +53,7 @@ def run(client, root, *, repository='osrsreboxed', snapshot='2026-10-30'):
         if completed(path) and (kind == 'items' or completed(directory / 'drops.parquet')):
             continue
         url = f'https://raw.githubusercontent.com/{REPOSITORIES[repository]}/master/docs/{kind}-complete.json'
-        payload, record = client.json(url)
+        payload, record = client.json(url, refresh=True)
         rows, drops = adapt(payload, kind)
         results.append(publish(path, rows, source=repository, record=record, schema=SCHEMAS[kind],
                                table=kind, price_observations=False))

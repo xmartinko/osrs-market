@@ -64,6 +64,6 @@ def publish(path, rows, *, source, record, schema=CANONICAL, **extras):
         pending.rename(path)
     timestamps = [r['ts'] for r in rows if r.get('ts') is not None]
     return manifest(path, source=source, rows=len(rows), fetched_at=record['fetched_at'],
-                    endpoint=record['url'], payload_sha256=record['sha256'],
+                    endpoint=record.get('original_url', record['url']), payload_sha256=record['sha256'],
                     min_ts=min(timestamps) if timestamps else None,
                     max_ts=max(timestamps) if timestamps else None, **extras)
