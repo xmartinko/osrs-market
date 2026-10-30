@@ -10,12 +10,16 @@ pub enum Message {
     Started(Value),
     Event(String, Value),
     Stream(String),
+    ChatStarted(Value),
 }
 pub enum Command {
     History(u64, String),
     Start(String, Value),
     Cancel(String),
     Watch(String),
+    ChatSend(Value),
+    ChatWatch(String),
+    ChatCancel(String),
 }
 async fn fetch(
     client: &reqwest::Client,
@@ -63,6 +67,8 @@ pub fn connect(
         loop {
             let routes = [
                 "health",
+                "usage",
+                "chats",
                 "prices/latest",
                 "alch/gaps",
                 "prices/movers",
@@ -90,8 +96,136 @@ pub fn connect(
     tokio::spawn(async move {
         let mut history = None::<tokio::task::JoinHandle<()>>;
         let mut watch = None::<tokio::task::JoinHandle<()>>;
+        let mut chat_watch = None::<tokio::task::JoinHandle<()>>;
         while let Some(command) = rx.recv().await {
             match command {
+                Command::ChatSend(body) => {
+                    let (client, server, tx) = (client.clone(), server.clone(), tx.clone());
+                    tokio::spawn(async move {
+                        let result = async {
+                            let response = client
+                                .post(format!("{server}/api/chat"))
+                                .json(&body)
+                                .send()
+                                .await
+                                .map_err(|e| e.to_string())?;
+                            let status = response.status();
+                            let value: Value = response.json().await.map_err(|e| e.to_string())?;
+                            if !status.is_success() {
+                                return Err(format!("{status}: {}", value["detail"]));
+                            }
+                            Ok(value)
+                        }
+                        .await;
+                        match result {
+                            Ok(value) => {
+                                let _ = tx.send(Message::ChatStarted(value));
+                            }
+                            Err(error) => {
+                                let _ = tx.send(Message::Error("chat send".into(), error));
+                            }
+                        }
+                    });
+                }
+                Command::ChatCancel(id) => {
+                    let (client, server, tx) = (client.clone(), server.clone(), tx.clone());
+                    tokio::spawn(async move {
+                        match client
+                            .post(format!("{server}/api/chat/{id}/cancel"))
+                            .send()
+                            .await
+                        {
+                            Ok(r) if r.status().is_success() => {}
+                            Ok(r) => {
+                                let _ = tx.send(Message::Error(
+                                    "chat cancel".into(),
+                                    r.status().to_string(),
+                                ));
+                            }
+                            Err(e) => {
+                                let _ =
+                                    tx.send(Message::Error("chat cancel".into(), e.to_string()));
+                            }
+                        }
+                        send_data(&client, &server, &format!("chat/{id}"), "chat", &tx).await;
+                    });
+                }
+                Command::ChatWatch(id) => {
+                    if let Some(task) = chat_watch.take() {
+                        task.abort();
+                    }
+                    if id.is_empty() {
+                        continue;
+                    }
+                    let (client, server, tx) = (client.clone(), server.clone(), tx.clone());
+                    chat_watch = Some(tokio::spawn(async move {
+                        let mut after = 0i64;
+                        let mut backoff = 1;
+                        loop {
+                            send_data(&client, &server, &format!("chat/{id}"), "chat", &tx).await;
+                            let base = server
+                                .replacen("https://", "wss://", 1)
+                                .replacen("http://", "ws://", 1);
+                            let url = format!("{base}/api/chat/{id}/stream?after={after}");
+                            match tokio_tungstenite::connect_async(url).await {
+                                Ok((mut socket, _)) => {
+                                    backoff = 1;
+                                    while let Some(message) = socket.next().await {
+                                        match message {
+                                            Ok(tokio_tungstenite::tungstenite::Message::Text(
+                                                text,
+                                            )) => {
+                                                if let Ok(event) =
+                                                    serde_json::from_str::<Value>(&text)
+                                                {
+                                                    after = event["seq"].as_i64().unwrap_or(after);
+                                                    if event["type"] == "done"
+                                                        || event["type"] == "thinking"
+                                                    {
+                                                        send_data(
+                                                            &client,
+                                                            &server,
+                                                            &format!("chat/{id}"),
+                                                            "chat",
+                                                            &tx,
+                                                        )
+                                                        .await;
+                                                    }
+                                                    if event["type"] == "done" {
+                                                        send_data(
+                                                            &client, &server, "usage", "usage", &tx,
+                                                        )
+                                                        .await;
+                                                    }
+                                                    if event["type"] == "log" {
+                                                        let _ = tx.send(Message::Data(
+                                                            "chat_progress".into(),
+                                                            event["data"].clone(),
+                                                        ));
+                                                    }
+                                                }
+                                            }
+                                            Ok(tokio_tungstenite::tungstenite::Message::Close(
+                                                _,
+                                            )) => break,
+                                            Err(_) => break,
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    let _ = tx
+                                        .send(Message::Error("chat stream".into(), e.to_string()));
+                                }
+                            }
+                            if tx.is_closed() {
+                                break;
+                            }
+                            tokio::time::sleep(Duration::from_secs(backoff)).await;
+                            backoff = (backoff * 2).min(30);
+                        }
+                    }));
+                }
                 Command::History(item, tf) => {
                     if let Some(task) = history.take() {
                         task.abort();

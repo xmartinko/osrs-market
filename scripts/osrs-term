@@ -3,7 +3,11 @@
 set -euo pipefail
 repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 export PATH="$HOME/.cargo/bin:$PATH"
-server_url=${OSRS_TERM_SERVER:-http://127.0.0.1:8787}
+server_port=${OSRS_TERM_PORT:-8787}
+if [[ ! "$server_port" =~ ^[0-9]+$ ]] || ((server_port < 1 || server_port > 65535)); then
+    echo "OSRS_TERM_PORT must be 1–65535" >&2; exit 1
+fi
+server_url=${OSRS_TERM_SERVER:-http://127.0.0.1:$server_port}
 server_pid=
 cleanup() {
     if [[ -n "$server_pid" ]]; then
@@ -18,14 +22,14 @@ cd "$repo_dir"
 uv sync --project ml --frozen
 cargo build --release --locked --manifest-path tui/Cargo.toml
 if ! curl --fail --silent --max-time 2 "$server_url/api/config" >/dev/null; then
-    if [[ "$server_url" != "http://127.0.0.1:8787" ]]; then
+    if [[ "$server_url" != "http://127.0.0.1:$server_port" ]]; then
         echo "Configured server is unavailable: $server_url" >&2
         exit 1
     fi
     log_dir=${XDG_STATE_HOME:-$HOME/.local/state}/osrs-term
     mkdir -p "$log_dir"
     # Exec the Python process directly so the trap signals the actual server.
-    ml/.venv/bin/python -m osrs_ml.server --host 127.0.0.1 --port 8787 >"$log_dir/server.log" 2>&1 &
+    ml/.venv/bin/python -m osrs_ml.server --host 127.0.0.1 --port "$server_port" >"$log_dir/server.log" 2>&1 &
     server_pid=$!
     ready=false
     for attempt in {1..100}; do

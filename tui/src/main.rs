@@ -1,4 +1,5 @@
 mod charts;
+mod chat;
 mod net;
 mod views;
 mod window;
@@ -26,6 +27,9 @@ use tokio::sync::mpsc;
 use window::{Bounds, Hit, Window};
 
 const VIEWS: &[&str] = &[
+    "Hermes chat",
+    "Chat: new conversation",
+    "Chat: next conversation",
     "Market table",
     "Alchemy gaps",
     "Candlestick chart",
@@ -96,6 +100,7 @@ struct App {
     track: String,
     preset: String,
     horizon: u64,
+    chat: chat::ChatUi,
 }
 fn layout_path() -> PathBuf {
     PathBuf::from(std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| {
@@ -175,7 +180,7 @@ impl App {
             drag: None,
             width: 0,
             height: 0,
-            server,
+            server: server.clone(),
             commands,
             item: state["item"].as_u64().unwrap_or(855),
             tf: state["tf"]
@@ -192,8 +197,14 @@ impl App {
             track: state["track"].as_str().unwrap_or("price_only").into(),
             preset: state["preset"].as_str().unwrap_or("conservative").into(),
             horizon: state["horizon"].as_u64().unwrap_or(1),
+            chat: chat::ChatUi::new(&state, &server),
         };
         app.history();
+        if !app.chat.id.is_empty() {
+            let _ = app
+                .commands
+                .send(net::Command::ChatWatch(app.chat.id.clone()));
+        }
         if !app.selected_job.is_empty() {
             let _ = app
                 .commands
@@ -210,7 +221,7 @@ impl App {
                 serde_json::to_vec_pretty(&self.windows)?,
             )?;
             fs::rename(path.with_extension("tmp"), &path)?;
-            let state = serde_json::json!({"item":self.item,"tf":self.tf,"selected_job":self.selected_job,"metric":self.metric,"dataset":self.dataset,"track":self.track,"preset":self.preset,"horizon":self.horizon});
+            let state = serde_json::json!({"item":self.item,"tf":self.tf,"selected_job":self.selected_job,"metric":self.metric,"dataset":self.dataset,"track":self.track,"preset":self.preset,"horizon":self.horizon,"chat_id":self.chat.id,"chat_server":self.server});
             fs::write(
                 path.with_file_name("state.tmp"),
                 serde_json::to_vec(&state)?,
@@ -265,7 +276,11 @@ impl App {
         }
     }
     fn action(&mut self, action: String) {
-        if let Some(kind) = action.strip_prefix("Start ") {
+        if action == "Chat: new conversation" {
+            self.new_chat();
+        } else if action == "Chat: next conversation" {
+            self.next_chat();
+        } else if let Some(kind) = action.strip_prefix("Start ") {
             let params = serde_json::json!({"dataset":self.dataset,"track":self.track,"preset":self.preset,"horizon_hours":self.horizon});
             self.errors.push(format!("Starting {kind}: {params}"));
             let _ = self.commands.send(net::Command::Start(kind.into(), params));
@@ -374,6 +389,7 @@ impl App {
                 "Candlestick chart" => self.candles(f, inner, w),
                 "Metric series" => charts::line(f, inner, &self.metric_points(), &self.metric),
                 "Jobs" => self.jobs(f, inner, w),
+                "Hermes chat" => self.chat_view(f, inner, w),
                 "Movers screener" => self.movers(f, inner, w),
                 "Model results" => self.models(f, inner, w),
                 "Collector health" => self.collector(f, inner, w),
@@ -399,7 +415,11 @@ impl App {
             Paragraph::new(status).style(Style::default().bg(Color::Rgb(23, 40, 51)).fg(ACCENT)),
             Rect::new(0, area.height.saturating_sub(2), area.width, 1),
         );
-        let help = if self.filtering {
+        let help = if self.windows.last().is_some_and(|w| w.view == "Hermes chat")
+            && self.chat.editing
+        {
+            " Enter send  Alt+Enter/Ctrl+J newline  Ctrl+X cancel  Esc leave input  Ctrl+P palette  Tab focus  Ctrl+W close"
+        } else if self.filtering {
             " Filter: type text · Enter finish · Esc clear"
         } else {
             " / palette  Tab focus  arrows move  Shift+arrows resize  Ctrl+W close  m maximize  f filter  s sort  j/k scroll  q/Esc quit"
@@ -647,6 +667,11 @@ impl App {
             }
             return false;
         }
+        if self.windows.last().is_some_and(|w| w.view == "Hermes chat")
+            && self.chat_key(code, modifiers)
+        {
+            return false;
+        }
         if self.filtering {
             if let Some(w) = self.windows.last_mut() {
                 match code {
@@ -798,6 +823,11 @@ impl App {
                         self.windows.push(w);
                         let rect = self.windows.last().unwrap().rect;
                         if action == Some(Hit::Body)
+                            && self.windows.last().is_some_and(|w| w.view == "Hermes chat")
+                        {
+                            self.chat.editing = true;
+                        }
+                        if action == Some(Hit::Body)
                             && self.windows.last().is_some_and(|w| w.view == "Jobs")
                         {
                             let relative = m.row.saturating_sub(rect.y);
@@ -846,7 +876,8 @@ impl App {
                 let rects: Vec<_> = self.windows.iter().map(|w| w.rect).collect();
                 if let Some(i) = window::topmost(&rects, m.column, m.row) {
                     let w = &mut self.windows[i];
-                    w.scroll = if m.kind == MouseEventKind::ScrollUp {
+                    w.scroll = if (m.kind == MouseEventKind::ScrollUp) == (w.view != "Hermes chat")
+                    {
                         w.scroll.saturating_sub(3)
                     } else {
                         w.scroll.saturating_add(3)
@@ -886,6 +917,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "models" => "Model results",
                         "collector" => "Collector health",
                         "metrics" => "Metric series",
+                        "chat" => "Hermes chat",
                         _ => return Err("unknown view".into()),
                     }
                     .into(),
@@ -893,7 +925,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             "--help" | "-h" => {
                 println!(
-                    "osrs-term [--server URL] [--view market|alchemy|candles|jobs|movers|models|collector|metrics]\nServer URL also reads OSRS_TERM_SERVER. / command palette; q quit."
+                    "osrs-term [--server URL] [--view market|alchemy|candles|jobs|movers|models|collector|metrics|chat]\nServer URL also reads OSRS_TERM_SERVER. / command palette; q quit."
                 );
                 return Ok(());
             }
@@ -919,6 +951,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         while let Ok(message) = rx.try_recv() {
             match message {
                 net::Message::Data(key, value) => {
+                    if key == "chat" && value["id"].as_str() != Some(app.chat.id.as_str()) {
+                        continue;
+                    }
                     if key == "health" {
                         app.connected = true;
                     }
@@ -932,8 +967,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             app.choose_job(id.into());
                         }
                     }
+                    if key == "chats" && app.chat.id.is_empty() && !app.chat.fresh {
+                        if let Some(id) = value["data"][0]["id"].as_str() {
+                            app.choose_chat(id.into());
+                        }
+                    }
                     app.received.insert(key.clone(), Instant::now());
                     app.data.insert(key, value);
+                }
+                net::Message::ChatStarted(value) => {
+                    app.chat.pending = false;
+                    if let Some(id) = value["id"].as_str() {
+                        app.chat.id = id.into();
+                        let _ = app.commands.send(net::Command::ChatWatch(id.into()));
+                    }
+                    app.data.insert("chat".into(), value);
+                    app.save();
                 }
                 net::Message::Started(job) => {
                     if let Some(id) = job["id"].as_str() {
@@ -963,6 +1012,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 net::Message::Error(key, error) => {
+                    if key.starts_with("chat") {
+                        if key == "chat send" {
+                            app.chat.pending = false;
+                            app.chat.errors.push(error.clone());
+                        } else if key == "chat cancel" {
+                            app.chat.errors.push(error.clone());
+                        }
+                    }
                     if key == "health" {
                         app.connected = false;
                     }
@@ -985,7 +1042,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if event::poll(Duration::from_millis(100))? {
             match event::read()? {
                 Event::Key(k) if k.kind == event::KeyEventKind::Press => {
-                    if k.code == KeyCode::Char('c') && k.modifiers.contains(KeyModifiers::CONTROL)
+                    if k.code == KeyCode::Char('c')
+                        && k.modifiers.contains(KeyModifiers::CONTROL)
+                        && !(app.chat.editing
+                            && app.windows.last().is_some_and(|w| w.view == "Hermes chat"))
                         || app.key(k.code, k.modifiers)
                     {
                         app.save();

@@ -154,3 +154,77 @@ Window hit regions, topmost targeting, drag/resize clamping, fuzzy search and
 chart cursor arithmetic have pure unit tests. Server tests use fixture data,
 mocked Wiki HTTP and real short subprocesses for success, failure, disconnect,
 replay, cancellation, queueing, timeout, restart and sealed-input guardrails.
+
+## Hermes chat
+
+Open **Hermes chat** in the command palette or launch `./scripts/osrs-term --view chat`.
+The pane restores its selected conversation after restart; **Chat: new conversation**
+starts another and **Chat: next conversation** cycles the server's saved conversations.
+`OSRS_TERM_CHAT_ID` can select a particular saved chat on launch. Multiple chat
+windows show the selected conversation, like the existing job/chart windows.
+
+Type in the bordered input, press Enter to send, Alt+Enter or Ctrl+J for a newline,
+and Esc to leave input (the panel stays open). Enter or `i` re-enters input; clicking
+the panel also enters input. Left/Right, Up/Down, Home/End, Backspace and Delete edit
+multiline text. Mouse wheel scrolls the transcript while the credit display and
+input stay fixed. Ctrl+X or Ctrl+C cancels a turn while editing; the UI stays live
+throughout the run. Esc then Ctrl+P opens the palette. The session ID is displayed
+above the transcript; this conversation is separate from other Hermes chats.
+
+The Python server invokes `/home/martin/.local/bin/hermes` using argv, with
+`--resume ID` **before** `-z PROMPT`. On the first turn it resolves the newest
+non-cron ID from `hermes sessions list`. A failed discovery is visible and blocks
+continuation until a session is supplied, avoiding an accidental fresh conversation.
+Server configuration:
+
+- `OSRS_HERMES_BIN`: trusted executable path (default above).
+- `OSRS_HERMES_SESSION`: fixed existing Hermes session ID for new conversations.
+- `OSRS_CHAT_TIMEOUT`: turn timeout in seconds (default 180).
+- `OSRS_CHAT_MODEL`: optional Hermes model override; otherwise Hermes safe-mode
+  defaults / `HERMES_INFERENCE_MODEL` apply.
+- `OSRS_TERM_PORT`: local server port for the launcher (default 8787).
+
+Chat uses Hermes v0.21.5's empty `bot_room` toolset with `--safe-mode` in an empty
+workspace, disabling file/terminal tools, delegation, plugins, MCP, hooks and rule
+injection. It is a text conversation with the agent; it cannot run commands or
+read research inputs. Safe mode skips the normal Hermes config, so set the model
+explicitly to retain your usual choice. For example, start both server and TUI:
+
+```bash
+OSRS_TERM_PORT=8788 OSRS_CHAT_MODEL='~deepseek/deepseek-flash-latest' ./scripts/osrs-term --view chat
+```
+
+POST `/api/chat` accepts `text`, optional `session`, and optional `chat_id` for a
+subsequent turn in a persisted conversation. GET `/api/chat/{id}` reloads the full
+transcript; GET `/api/chats` lists conversations. WS `/api/chat/{id}/stream?after=N`
+replays durable `thinking`, `log` (when Hermes emits stderr), `message`, and `done`
+events, including results produced before attachment. POST `/api/chat/{id}/cancel`
+terminates the process group. The server rejects overlapping turns with HTTP 409
+`detail.status=busy`; there is no automatic queue or retry of a prompt. Prompts
+are limited to 16,000 characters and reject control characters other than newline
+and tab. Output capture is bounded to 1 MiB per channel. Abrupt restart records an
+interrupted turn as failed; normal shutdown cancels it.
+
+Chats, messages, timings, exit status, timeout/cancel flags and Hermes usage reports
+live in the existing `$OSRS_DATA_DIR/server/jobs.sqlite`, outside Git. Estimated
+per-turn cost, token counters, API calls and model come from a private temporary
+`--usage-file`; an absent report is marked unknown. Newer reports' aggregate cost
+includes auxiliary work such as title generation. The chat total is marked
+incomplete when any turn lacks usage.
+
+GET `/api/usage` reads OpenRouter `/api/v1/credits` and `/api/v1/key`, with a Bearer
+key loaded privately from `OPENROUTER_API_KEY` or `~/.hermes/.env`. It returns total,
+used, remaining, percentage, daily/weekly/monthly spend, key-limit information and
+the reading timestamp. The server caches it for 60 seconds and invalidates after
+chat completion. Failures return the last reading with `stale=true` and a visible
+error, or null balances if none was fetched. The pane marks stale/offline readings
+explicitly, uses green/amber (<25%)/red (<10%) and shows today's spend, this chat's
+estimated cost and the last turn's cost. No credential or credential fragment is
+returned or displayed.
+
+Chat/usage tests use an executable fake Hermes on PATH and mocked OpenRouter HTTP;
+they never invoke the real agent or billing API:
+
+```bash
+cd ml && uv run --frozen pytest tests/test_server_chat.py -q
+```
