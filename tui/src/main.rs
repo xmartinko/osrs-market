@@ -1,6 +1,7 @@
 mod charts;
 mod chat;
 mod net;
+mod profile;
 mod terminal;
 mod views;
 mod window;
@@ -1197,7 +1198,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     enable_raw_mode()?;
     let _screen = Screen;
     execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
-    let mut terminal = Terminal::new(CrosstermBackend::new(io::stdout()))?;
+    let bytes = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let mut profiler = profile::Profile::new();
+    let mut terminal = Terminal::new(CrosstermBackend::new(profile::CountWriter(bytes.clone())))?;
     // Restore the terminal even if a rendering panic occurs.
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -1301,7 +1304,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             app.clamp(size.width, size.height);
         }
         app.sync_terminal();
+        let started = Instant::now();
+        let before = bytes.load(std::sync::atomic::Ordering::Relaxed);
         terminal.draw(|f| app.draw(f))?;
+        profiler.frame(started, bytes.load(std::sync::atomic::Ordering::Relaxed) - before, app.hover, app.drag.is_some());
         if event::poll(Duration::from_millis(100))? {
             match event::read()? {
                 Event::Key(k) if k.kind == event::KeyEventKind::Press => {
@@ -1315,7 +1321,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         break;
                     }
                 }
-                Event::Mouse(m) => app.mouse(m),
+                Event::Mouse(m) => { profiler.events += 1; profiler.pending += 1; app.mouse(m) },
                 Event::Resize(w, h) => {
                     app.clamp(w, h);
                     app.save()
