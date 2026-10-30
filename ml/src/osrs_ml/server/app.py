@@ -13,7 +13,7 @@ from .search_intent import Query as SearchQuery
 from .search_intent import parse_intent
 from .service import ML, Service
 from .terminal import AlertRequest, ChartRequest, PanelRequest, Terminal
-from .usage import Usage
+from .usage import Usage, subscription_usage
 
 
 def create_app(service=None, runner=None, chat=None, usage=None):
@@ -73,8 +73,8 @@ def create_app(service=None, runner=None, chat=None, usage=None):
         return await parse_intent(request.query)
 
     @app.get("/api/usage")
-    async def credits():
-        return await usage.get()
+    async def credits(target: Literal["hermes", "codex"] = "hermes"):
+        return subscription_usage() if target == "codex" else await usage.get()
 
     @app.post("/api/chat", status_code=202)
     async def start_chat(request: ChatRequest):

@@ -111,3 +111,14 @@ class Usage:
 
     async def close(self):
         await self.client.aclose()
+
+
+def subscription_usage():
+    return dict(
+        target="codex",
+        plan="ChatGPT Plus",
+        billing_model="subscription",
+        per_token_billing=False,
+        timestamp=time.time(),
+        stale=False,
+    )

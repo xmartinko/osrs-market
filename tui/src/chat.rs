@@ -2,6 +2,10 @@ use super::*;
 
 pub struct ChatUi {
     pub id: String,
+    pub target: String,
+    pub workdir: String,
+    pub allow_writes: bool,
+    pub confirmation: String,
     pub input: String,
     pub cursor: usize,
     pub editing: bool,
@@ -21,6 +25,19 @@ impl ChatUi {
         });
         Self {
             id,
+            target: state["chat_target"].as_str().unwrap_or("hermes").into(),
+            workdir: state["chat_workdir"]
+                .as_str()
+                .map(str::to_string)
+                .or_else(|| std::env::var("OSRS_CODEX_WORKDIR").ok())
+                .unwrap_or_else(|| {
+                    std::env::current_dir()
+                        .unwrap_or_default()
+                        .display()
+                        .to_string()
+                }),
+            allow_writes: false,
+            confirmation: String::new(),
             input: String::new(),
             cursor: 0,
             editing: true,
@@ -70,8 +87,121 @@ fn money(value: Option<f64>) -> String {
         .unwrap_or_else(|| "—".into())
 }
 
+/// Provider-specific billing is deliberately separate from message rendering.
+fn billing_lines(target: &str, usage: &Value, chat: &Value, stale: bool) -> (String, String) {
+    let last = chat["messages"]
+        .as_array()
+        .and_then(|rs| rs.iter().rev().find(|r| r["role"] == "assistant"));
+    if target == "codex" {
+        let counters = last.map(|r| &r["usage"]);
+        let detail = counters
+            .filter(|u| u["input_tokens"].is_number())
+            .map(|u| {
+                format!(
+                    "last turn tokens: input {} · cached {} · output {}",
+                    val(&u["input_tokens"]),
+                    val(&u["cached_input_tokens"]),
+                    val(&u["output_tokens"])
+                )
+            })
+            .unwrap_or_else(|| "last turn usage unavailable".into());
+        return (
+            "Codex · ChatGPT Plus · subscription · no per-token billing".into(),
+            format!(
+                "{detail}{}",
+                if stale {
+                    " · connection stale / unavailable"
+                } else {
+                    ""
+                }
+            ),
+        );
+    }
+    let percent = usage["percent_remaining"].as_f64().unwrap_or(0.);
+    let credits = if let (Some(remaining), Some(total), Some(used)) = (
+        usage["remaining"].as_f64(),
+        usage["total_credits"].as_f64(),
+        usage["total_usage"].as_f64(),
+    ) {
+        let full = (percent.clamp(0., 100.) / 10.).round() as usize;
+        format!(
+            "Hermes credits {}{} ${remaining:.2} / ${total:.2} ({percent:.0}%) · used ${used:.2}{}",
+            "▊".repeat(full),
+            "░".repeat(10 - full),
+            if stale { " · STALE / unavailable" } else { "" }
+        )
+    } else {
+        "Hermes credits — unavailable / stale".into()
+    };
+    (
+        credits,
+        format!(
+            "today {} · this chat {}{} · last turn {}{}",
+            money(usage["usage_daily"].as_f64()),
+            money(chat["cost"].as_f64()),
+            if chat["cost_incomplete"] == true {
+                " (incomplete)"
+            } else {
+                ""
+            },
+            money(last.and_then(|r| r["usage"]["cost"].as_f64())),
+            usage["error"]
+                .as_str()
+                .map(|e| format!(" · {e}"))
+                .unwrap_or_default()
+        ),
+    )
+}
+
 impl App {
+    pub fn sync_chat_config(&mut self, row: &Value) {
+        self.chat.target = row["target"].as_str().unwrap_or("hermes").into();
+        if let Some(dir) = row["workdir"].as_str() {
+            self.chat.workdir = dir.into();
+        }
+        self.chat.allow_writes = row["allow_writes"]
+            .as_bool()
+            .unwrap_or_else(|| row["allow_writes"].as_i64() == Some(1));
+    }
+    pub fn switch_target(&mut self, target: &str) {
+        if self.chat.pending
+            || self
+                .data
+                .get("chat")
+                .is_some_and(|v| v["status"] == "running")
+        {
+            self.chat
+                .errors
+                .push("Cancel or finish the turn before switching targets".into());
+            return;
+        }
+        if self.chat.target != target {
+            self.new_chat();
+        }
+        self.chat.target = target.into();
+        self.chat.allow_writes = false;
+        self.chat.confirmation = if target == "codex" {
+            format!(
+                "new conversation with codex, workdir {}, read-only",
+                self.chat.workdir
+            )
+        } else {
+            "new conversation with hermes".into()
+        };
+        if !self.windows.last().is_some_and(|w| w.view == "Hermes chat") {
+            self.add("Hermes chat".into());
+        }
+        self.save();
+    }
     pub fn choose_chat(&mut self, id: String) {
+        if let Some(row) = self
+            .rows("chats")
+            .into_iter()
+            .find(|r| r["id"] == id)
+            .cloned()
+        {
+            self.sync_chat_config(&row);
+        }
         self.chat.id = id.clone();
         self.chat.fresh = false;
         self.chat.errors.clear();
@@ -129,6 +259,15 @@ impl App {
                 .is_some_and(|v| v["status"] == "running");
         if modifiers.contains(KeyModifiers::CONTROL) {
             match code {
+                KeyCode::Char('t') => {
+                    let target = if self.chat.target == "hermes" {
+                        "codex"
+                    } else {
+                        "hermes"
+                    };
+                    self.switch_target(target);
+                    return true;
+                }
                 KeyCode::Char('c' | 'x') => {
                     if !self.chat.id.is_empty() && running {
                         let _ = self
@@ -178,7 +317,12 @@ impl App {
                             .errors
                             .push("Busy: wait for this turn or press Ctrl+X to cancel".into());
                     } else {
-                        let mut request = serde_json::json!({"text":self.chat.input});
+                        let mut request =
+                            serde_json::json!({"text":self.chat.input, "target":self.chat.target});
+                        if self.chat.target == "codex" {
+                            request["workdir"] = self.chat.workdir.clone().into();
+                            request["allow_writes"] = self.chat.allow_writes.into();
+                        }
                         if !self.chat.id.is_empty() {
                             request["chat_id"] = self.chat.id.clone().into();
                         }
@@ -296,67 +440,52 @@ impl App {
         .split(area);
         let null = Value::Null;
         let chat = self.data.get("chat").unwrap_or(&null);
-        let session = chat["session"]
+        let target = self.chat.target.as_str();
+        let session = chat["agent_session"]
             .as_str()
+            .or_else(|| chat["session"].as_str())
             .unwrap_or("pending first turn / discovery");
-        f.render_widget(Paragraph::new(vec![
-            Line::from(format!("Hermes session: {session}")),
-            Line::styled("Separate Hermes session from other chats • / palette after Esc • Chat: new / next conversation", Style::default().fg(Color::Gray)),
-        ]), parts[0]);
+        f.render_widget(
+            Paragraph::new(vec![
+                Line::from(format!("{target} session: {session}")),
+                Line::styled(
+                    format!(
+                        "target: {} ▸  Ctrl+T / click to switch{}",
+                        if target == "codex" { "Codex" } else { "Hermes" },
+                        if target == "codex" {
+                            format!(
+                                " · {} · {}",
+                                self.chat.workdir,
+                                if self.chat.allow_writes {
+                                    "workspace-write"
+                                } else {
+                                    "read-only"
+                                }
+                            )
+                        } else {
+                            String::new()
+                        }
+                    ),
+                    Style::default().fg(ACCENT),
+                ),
+            ]),
+            parts[0],
+        );
         let usage = self.data.get("usage").unwrap_or(&null);
-        let percent = usage["percent_remaining"].as_f64().unwrap_or(0.);
-        let color = if percent < 10. {
-            Color::Red
-        } else if percent < 25. {
-            Color::Yellow
-        } else {
-            Color::Green
-        };
         let age = usage["timestamp"]
             .as_f64()
             .map(|t| (chrono::Utc::now().timestamp() as f64 - t).max(0.) as u64);
         let stale = !self.connected || usage["stale"] == true || age.is_none_or(|a| a >= 120);
-        let credits = if let (Some(remaining), Some(total)) =
-            (usage["remaining"].as_f64(), usage["total_credits"].as_f64())
-        {
-            let full = (percent.clamp(0., 100.) / 10.).round() as usize;
-            format!(
-                "credits {}{} ${remaining:.2} / ${total:.2} ({percent:.0}%){}",
-                "▊".repeat(full),
-                "░".repeat(10 - full),
-                if stale {
-                    format!(" — stale {}m", age.unwrap_or(0) / 60)
-                } else {
-                    String::new()
-                }
-            )
-        } else {
-            "credits — unavailable / stale".into()
-        };
-        let last = chat["messages"]
-            .as_array()
-            .and_then(|rows| rows.iter().rev().find(|r| r["role"] == "assistant"))
-            .and_then(|r| r["usage"]["cost"].as_f64());
-        let spend = format!(
-            "today {} • this chat {}{} • last turn {}{}",
-            money(usage["usage_daily"].as_f64()),
-            money(chat["cost"].as_f64()),
-            if chat["cost_incomplete"] == true {
-                " (incomplete)"
-            } else {
-                ""
-            },
-            money(last),
-            usage["error"]
-                .as_str()
-                .map(|e| format!(" • {e}"))
-                .unwrap_or_default()
-        );
+        let (credits, spend) = billing_lines(target, usage, chat, stale);
         f.render_widget(
             Paragraph::new(vec![
                 Line::styled(
                     credits,
-                    Style::default().fg(if stale { Color::Yellow } else { color }),
+                    Style::default().fg(if target == "hermes" && stale {
+                        Color::Yellow
+                    } else {
+                        ACCENT
+                    }),
                 ),
                 Line::from(spend),
             ]),
@@ -389,12 +518,29 @@ impl App {
             parts[2],
         );
         let mut lines = vec![];
+        if chat.is_null() && !self.chat.confirmation.is_empty() {
+            for line in wrapped(&self.chat.confirmation, parts[3].width) {
+                lines.push(Line::styled(line, Style::default().fg(Color::Yellow)));
+            }
+        }
         if let Some(messages) = chat["messages"].as_array() {
             for message in messages {
                 let user = message["role"] == "user";
                 let text = format!(
                     "{}: {}",
-                    if user { "You" } else { "Hermes" },
+                    if user {
+                        "You".into()
+                    } else if message["role"] == "system" {
+                        "System".into()
+                    } else if target == "codex" {
+                        format!(
+                            "[codex · {} · {}]",
+                            message["workdir"].as_str().unwrap_or(&self.chat.workdir),
+                            message["sandbox"].as_str().unwrap_or("read-only")
+                        )
+                    } else {
+                        "[hermes]".to_string()
+                    },
                     message["text"].as_str().unwrap_or("")
                 );
                 for line in wrapped(&text, parts[3].width) {
@@ -521,5 +667,19 @@ mod input_tests {
         assert_eq!(app.windows.len(), 1);
         app.chat_key(KeyCode::Enter, KeyModifiers::NONE);
         assert!(app.chat.editing);
+    }
+}
+
+#[cfg(test)]
+mod billing_tests {
+    use super::*;
+    #[test]
+    fn subscription_never_formats_dollars_and_marks_unavailable() {
+        let u = serde_json::json!({"remaining":10.,"total_credits":20.,"total_usage":10.,"percent_remaining":50.,"usage_daily":0.1});
+        let (a, b) = billing_lines("codex", &u, &Value::Null, false);
+        assert!(a.contains("ChatGPT Plus") && a.contains("no per-token billing"));
+        assert!(!format!("{a}{b}").contains('$') && b.contains("unavailable"));
+        let (a, b) = billing_lines("hermes", &u, &Value::Null, true);
+        assert!(a.contains("$10.00") && a.contains("STALE") && b.contains("$0.1000"));
     }
 }

@@ -95,6 +95,11 @@ const VIEWS: &[&str] = &[
     "Link: magenta",
     "Undo close",
     "Hermes chat",
+    "chat with Codex",
+    "chat with Hermes",
+    "Chat: enable writes",
+    "Chat: read-only",
+    "Chat log",
     "Chat: new conversation",
     "Chat: next conversation",
     "Market table",
@@ -276,7 +281,7 @@ impl App {
                 serde_json::to_vec_pretty(&self.windows)?,
             )?;
             fs::rename(path.with_extension("tmp"), &path)?;
-            let state = serde_json::json!({"item":self.item,"selected_job":self.selected_job,"metric":self.metric,"dataset":self.dataset,"track":self.track,"preset":self.preset,"horizon":self.horizon,"chat_id":self.chat.id,"chat_server":self.server});
+            let state = serde_json::json!({"item":self.item,"selected_job":self.selected_job,"metric":self.metric,"dataset":self.dataset,"track":self.track,"preset":self.preset,"horizon":self.horizon,"chat_id":self.chat.id,"chat_server":self.server,"chat_target":self.chat.target,"chat_workdir":self.chat.workdir});
             fs::write(
                 path.with_file_name("state.tmp"),
                 serde_json::to_vec(&state)?,
@@ -339,7 +344,38 @@ impl App {
             self.save();
             return;
         }
-        if action == "Chat: new conversation" {
+        if action == "chat with Codex" || action == "chat with Hermes" {
+            self.switch_target(if action.ends_with("Codex") {
+                "codex"
+            } else {
+                "hermes"
+            });
+        } else if let Some(dir) = action.strip_prefix("Chat workdir: ") {
+            self.new_chat();
+            self.chat.workdir = dir.into();
+            self.switch_target("codex");
+        } else if action == "Chat: enable writes" || action == "Chat: read-only" {
+            if self.chat.target == "codex"
+                && !self.chat.pending
+                && !self
+                    .data
+                    .get("chat")
+                    .is_some_and(|v| v["status"] == "running")
+            {
+                // A mode choice creates a new conversation so pending configuration
+                // cannot be overwritten by an older transcript arriving over the wire.
+                self.new_chat();
+                self.chat.allow_writes = action == "Chat: enable writes";
+                self.chat.confirmation = format!(
+                    "Codex mode: {}",
+                    if self.chat.allow_writes {
+                        "workspace-write"
+                    } else {
+                        "read-only"
+                    }
+                );
+            }
+        } else if action == "Chat: new conversation" {
             self.new_chat();
         } else if action == "Chat: next conversation" {
             self.next_chat();
@@ -496,6 +532,22 @@ impl App {
                 "Metric series" => charts::line(f, inner, &self.metric_points(), &self.metric),
                 "Jobs" => self.jobs(f, inner, w),
                 "Hermes chat" => self.chat_view(f, inner, w),
+                "Chat log" => {
+                    let text = self
+                        .data
+                        .get("chat_progress")
+                        .and_then(|v| v["text"].as_str())
+                        .unwrap_or("No progress yet. Start a turn in the chat panel.");
+                    f.render_widget(
+                        Paragraph::new(format!(
+                            "{} · {}\n{}",
+                            self.chat.target, self.chat.id, text
+                        ))
+                        .wrap(Wrap { trim: false })
+                        .scroll((w.scroll.min(u16::MAX as usize) as u16, 0)),
+                        inner,
+                    );
+                }
                 "Movers screener" => self.movers(f, inner, w),
                 "Model results" => self.models(f, inner, w),
                 "Collector health" => self.collector(f, inner, w),
@@ -1002,7 +1054,16 @@ impl App {
                         if action == Some(Hit::Body)
                             && self.windows.last().is_some_and(|w| w.view == "Hermes chat")
                         {
-                            self.chat.editing = true;
+                            if m.row == rect.y + 2 {
+                                let target = if self.chat.target == "hermes" {
+                                    "codex"
+                                } else {
+                                    "hermes"
+                                };
+                                self.switch_target(target);
+                            } else {
+                                self.chat.editing = true;
+                            }
                         }
                         if action == Some(Hit::Body)
                             && self.windows.last().is_some_and(|w| w.view == "Jobs")
@@ -1238,6 +1299,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if key == "chat" && value["id"].as_str() != Some(app.chat.id.as_str()) {
                         continue;
                     }
+                    if key == "chat" {
+                        app.sync_chat_config(&value);
+                    }
                     if key == "health" {
                         app.connected = true;
                     }
@@ -1256,6 +1320,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             app.choose_chat(id.into());
                         }
                     }
+                    let mut value = value;
+                    if key == "chat_progress" {
+                        let old = app
+                            .data
+                            .get(&key)
+                            .and_then(|v| v["text"].as_str())
+                            .unwrap_or("");
+                        let mut text = format!("{}{}", old, value["text"].as_str().unwrap_or(""));
+                        if text.len() > 65536 {
+                            let mut start = text.len() - 65536;
+                            while !text.is_char_boundary(start) {
+                                start += 1;
+                            }
+                            text = text[start..].into();
+                        }
+                        value["text"] = text.into();
+                    }
                     app.received.insert(key.clone(), Instant::now());
                     app.data.insert(key, value);
                 }
@@ -1265,6 +1346,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         app.chat.id = id.into();
                         let _ = app.commands.send(net::Command::ChatWatch(id.into()));
                     }
+                    app.sync_chat_config(&value);
                     app.data.insert("chat".into(), value);
                     app.save();
                 }

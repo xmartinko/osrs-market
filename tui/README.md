@@ -321,3 +321,27 @@ they never invoke the real agent or billing API:
 ```bash
 cd ml && uv run --frozen pytest tests/test_server_chat.py -q
 ```
+
+## Agent conversations
+
+The chat panel supports Hermes and Codex. Click `target: … ▸` or press Ctrl+T
+while the chat panel is focused to start a conversation with the other target.
+Palette commands `chat with Codex` and `chat with Hermes` do the same. Each
+conversation retains its target and agent session ID; switching never mixes
+agents into an existing transcript. `Chat: next conversation` restores history.
+`Chat log` opens the streamed progress log for the current conversation.
+
+Codex uses the authenticated local CLI and ChatGPT Plus subscription, with no
+per-token billing or dollar balance. The header and assistant badges show its
+workdir and sandbox. It defaults to `read-only`. `Chat workdir: /absolute/path`
+sets the workdir for a new conversation. `Chat: enable writes` explicitly starts
+a new conversation with `workspace-write` scoped to that workdir; `Chat: read-only`
+starts one without write access. Hermes retains OpenRouter dollar credits,
+today's spend and usage-file turn costs. Missing/stale readings are marked.
+
+Server settings: `OSRS_CODEX_BIN` (default `codex` on PATH),
+`OSRS_CODEX_WORKDIR`, `OSRS_CODEX_TIMEOUT` (600 seconds), `OSRS_HERMES_BIN`,
+`OSRS_CHAT_TIMEOUT` (180 seconds). Prompts are limited to 16,000 characters.
+There is a global cap of one chat turn, including across server instances sharing
+the SQLite store. Ctrl+X/Ctrl+C cancels the child process group. Agent turns and
+stream events are persisted in SQLite outside git; no API key is needed for Codex.
