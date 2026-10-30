@@ -63,7 +63,7 @@ def rsi(values, period=14):
     out = [None] * len(values)
     if len(values) <= period:
         return out
-    changes = [b - a for a, b in zip(values, values[1:])]
+    changes = [b - a for a, b in zip(values, values[1:], strict=False)]
     gain = fmean(max(0, x) for x in changes[:period])
     loss = fmean(max(0, -x) for x in changes[:period])
     for i in range(period, len(values)):
@@ -76,13 +76,13 @@ def rsi(values, period=14):
 
 def macd(values):
     fast, slow = ema(values, 12), ema(values, 26)
-    line = [None if b is None else a - b for a, b in zip(fast, slow)]
+    line = [None if b is None else a - b for a, b in zip(fast, slow, strict=False)]
     available = [v for v in line if v is not None]
     signal = [None] * (len(values) - len(available)) + ema(available, 9)
     return {
         "MACD": line,
         "Signal": signal,
-        "Histogram": [None if s is None else v - s for v, s in zip(line, signal)],
+        "Histogram": [None if s is None else v - s for v, s in zip(line, signal, strict=False)],
     }
 
 
@@ -203,6 +203,8 @@ def kagi(values, reversal):
         sign = 1 if price > extreme else -1
         if direction == 0 or sign == direction:
             if price != extreme:
+                if direction == 0:
+                    result.append(dict(index=i, close=price, direction=sign))
                 direction, extreme = sign, price
                 result[-1] = dict(index=i, close=price, direction=direction)
         elif abs(price - extreme) >= reversal:
@@ -319,6 +321,7 @@ def chart(
     lock=False,
     fixed_bounds=None,
     box=None,
+    price_only=True,
 ):
     """Prepare all geometry and studies for a rendering-only terminal client."""
     if style not in STYLES or mode not in SCALES:
@@ -327,7 +330,10 @@ def chart(
         return dict(lines=[], rects=[], glyphs=[], labels=[], panes=[], bounds=[0, 1], count=1)
     values = [r["close"] for r in rows]
     base = values[0]
-    project = lambda v: scale(v, mode, base) * (-1 if invert else 1)
+
+    def project(v):
+        return scale(v, mode, base) * (-1 if invert else 1)
+
     box = box or max((max(values) - min(values)) / 30, abs(base) * 0.002, 0.01)
     transformed = rows
     if style == "Heikin Ashi":
@@ -436,7 +442,8 @@ def chart(
         vals = [p[1] for ps in pane["points"].values() for p in ps]
         pane.setdefault("bounds", [min(vals + [0]), max(vals + [1])])
     bounds_values = [project(r[k]) for r in transformed for k in ("close", "high", "low") if k in r]
-    bounds_values += [v for l in lines for v in (l[1], l[3])]
+    if not price_only:
+        bounds_values += [v for line in lines for v in (line[1], line[3])]
     lo, hi = min(bounds_values or [0]), max(bounds_values or [1])
     pad = max((hi - lo) * 0.08, abs(hi) * 0.00001, 0.0001)
     lo, hi = (lo - pad, hi + pad) if fixed_bounds is None else fixed_bounds

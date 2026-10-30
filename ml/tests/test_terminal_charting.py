@@ -116,7 +116,7 @@ def test_renko_two_box_reversal_and_noise():
 
 def test_kagi_ignores_subthreshold_reversals():
     legs = kagi([100, 110, 108, 109, 105, 102], 5)
-    assert [x["close"] for x in legs] == [110, 102]
+    assert [x["close"] for x in legs] == [100, 110, 102]
 
 
 def test_point_figure_three_box_reversal():
@@ -171,3 +171,15 @@ def test_treemap_tiles_without_overlap(width, height):
                 assert (x, y) not in occupied
                 occupied.add((x, y))
     assert len(occupied) == width * height
+
+
+def test_kagi_monotone_series_keeps_initial_anchor():
+    assert [r["close"] for r in kagi([100, 110, 120], 5)] == [100, 120]
+    assert chart(rows([100, 110, 120]), "Kagi")["lines"]
+
+
+def test_price_only_autofit_excludes_extreme_studies():
+    data = rows([100] * 20 + [200])
+    price = chart(data, indicators=["BOLL"], price_only=True)
+    all_studies = chart(data, indicators=["BOLL"], price_only=False)
+    assert price["bounds"][0] > all_studies["bounds"][0]

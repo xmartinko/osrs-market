@@ -9,6 +9,7 @@ from . import VERSION
 from .chat import Busy, ChatRequest, ChatRunner
 from .jobs import TERMINAL, JobRequest, Runner
 from .service import ML, Service
+from .terminal import AlertRequest, ChartRequest, PanelRequest, Terminal
 from .usage import Usage
 
 
@@ -18,14 +19,29 @@ def create_app(service=None, runner=None, chat=None, usage=None):
 
     chat = chat or ChatRunner(runner.store.path)
     usage = usage or Usage()
+    terminal = Terminal(service)
 
     @asynccontextmanager
     async def lifespan(app):
         await runner.start()
         await chat.start()
+
+        async def alert_loop():
+            while True:
+                try:
+                    await asyncio.to_thread(terminal.evaluate_alerts)
+                except Exception:
+                    import logging
+
+                    logging.getLogger(__name__).exception("Alert evaluation failed")
+                await asyncio.sleep(5)
+
+        alert_task = asyncio.create_task(alert_loop())
         try:
             yield
         finally:
+            alert_task.cancel()
+            await asyncio.gather(alert_task, return_exceptions=True)
             await chat.close()
             await usage.close()
             await runner.close()
@@ -134,6 +150,33 @@ def create_app(service=None, runner=None, chat=None, usage=None):
         except WebSocketDisconnect:
             pass
 
+    @app.post("/api/terminal/chart")
+    def terminal_chart(request: ChartRequest):
+        try:
+            return terminal.chart(request)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
+
+    @app.post("/api/terminal/panel")
+    def terminal_panel(request: PanelRequest):
+        try:
+            return terminal.panel(request)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
+
+    @app.get("/api/terminal/alerts")
+    def terminal_alerts():
+        return terminal.alerts()
+
+    @app.post("/api/terminal/alerts", status_code=201)
+    def terminal_alert_add(request: AlertRequest):
+        return terminal.add_alert(request)
+
+    @app.delete("/api/terminal/alerts/{alert_id}")
+    def terminal_alert_delete(alert_id: int):
+        return terminal.delete_alert(alert_id)
+
+    app.state.terminal = terminal
     app.state.service = service
     app.get("/api/health")(service.health)
     app.get("/api/items")(service.items)
