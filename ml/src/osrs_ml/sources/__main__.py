@@ -34,9 +34,17 @@ def main():
     parser.add_argument('--limit', type=int)
     args = parser.parse_args()
     root = external_root(args.root)
-    client = Client(root / 'evidence/http')
+    client = Client(root / ('ge-tracker/evidence/http' if args.source == 'ge-tracker'
+                          else 'evidence/http'), host_locks=root / 'evidence/.http-hosts')
     with (root / f'.{args.source}.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        if args.source == 'ge-tracker':
+            result = SOURCES[args.source](client, root, snapshot=args.snapshot,
+                                         ids=args.ids, limit=args.limit)
+            print(json.dumps(result), flush=True)
+            if not result['selection_complete']:
+                raise SystemExit(2)
+            return
         mapping = mapping_snapshot(client, root)
         bulk_sources = ('wiki-v2-bulk', 'wiki-v2-forward', 'wiki-v2-repair', 'wiki-v2-snapshots')
         if args.ids and args.source not in bulk_sources:

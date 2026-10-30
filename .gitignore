@@ -9,6 +9,8 @@ auth-service/dist/
 .env
 .env.*
 !.env.example
+# Private research headers; the canonical file lives outside this repository.
+ge-tracker.env
 
 # IDE
 .idea/

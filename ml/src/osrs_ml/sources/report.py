@@ -13,6 +13,7 @@ from .storage import external_root
 
 def groups(root):
     patterns = {
+        'ge-tracker-weekly': 'ge-tracker/*/weekly/items/*.parquet',
         'weirdgloop-all': 'weirdgloop-all/????-??-??/items/*.parquet',
         'weirdgloop-archive-only': 'weirdgloop-all/*archive-only/items/*.parquet',
         'weirdgloop-last90d': 'weirdgloop-last90d/*/items/*.parquet',
@@ -38,6 +39,9 @@ def groups(root):
 
 def feature_groups(root):
     patterns = {
+        'ge-tracker-items': 'ge-tracker/*/catalogue/*.parquet',
+        'ge-tracker-details': 'ge-tracker/*/details/items/*.parquet',
+        'ge-tracker-market-watch': 'ge-tracker/*/market-watch/*.parquet',
         'wiki-mapping': 'wiki-v2/mapping/*/*.parquet',
         'wiki-items': 'wiki-pages/????-??-??/items/*.parquet',
         'wiki-modules': 'wiki-pages/????-??-??/modules/*.parquet',
@@ -110,7 +114,8 @@ def run(root, *, baseline_cutoff=None):
             continue
         rows = sum(v['rows'] for v in selected[name])
         # Small preview only; never open the original exports or sealed research panels.
-        sample = next(pq.ParquetFile(paths[0]).iter_batches(batch_size=1)).to_pylist()[0]
+        batch = next(pq.ParquetFile(paths[0]).iter_batches(batch_size=1), None)
+        sample = batch.to_pylist()[0] if batch is not None else {}
         sample = {k: v for k, v in sample.items() if k not in ('wikitext', 'raw_json', 'source_extra')}
         result['features'][name] = dict(rows=rows, files=len(paths), sample=sample)
         print(name, rows, json.dumps(sample, default=str), flush=True)

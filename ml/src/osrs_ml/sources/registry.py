@@ -5,6 +5,7 @@ from . import (
     academic,
     activity,
     dumps,
+    ge_tracker,
     jagex,
     kaggle,
     kaggle_other,
@@ -19,6 +20,7 @@ from . import (
 )
 
 SOURCES = {
+    'ge-tracker': ge_tracker.run,
     'weirdgloop-all': partial(weirdgloop.run, kind='all'),
     'weirdgloop-last90d': partial(weirdgloop.run, kind='last90d'),
     'weirdgloop-archive-only': weirdgloop.archive_only,
