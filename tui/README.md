@@ -355,3 +355,9 @@ Double click within 300 ms opens an independent chart, preserving existing chart
 Shift+click appends to the link group's comparison set (maximum five unique IDs).
 A two-cell pointer movement cancels row selection, including a drag that returns
 to its starting position. Single clicks have a 300 ms double-click recognition delay.
+
+Resize bands extend two cells inside each edge. The center of the title row stays
+available for moving; grab the row immediately below it to resize the top edge.
+Corners win over adjoining edges. The minimum window size is 20×6 (or the terminal
+size on smaller terminals); dragging displays dimensions in the title. Release
+saves the final rect atomically with the layout.

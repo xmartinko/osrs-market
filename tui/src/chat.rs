@@ -175,9 +175,7 @@ impl App {
                 .push("Cancel or finish the turn before switching targets".into());
             return;
         }
-        if self.chat.target != target {
-            self.new_chat();
-        }
+        self.new_chat();
         self.chat.target = target.into();
         self.chat.allow_writes = false;
         self.chat.confirmation = if target == "codex" {
@@ -224,6 +222,16 @@ impl App {
         }
         let _ = self.commands.send(net::Command::ChatWatch(String::new()));
         self.chat.id.clear();
+        self.chat.allow_writes = false;
+        self.chat.confirmation = format!(
+            "new conversation with {}{}",
+            self.chat.target,
+            if self.chat.target == "codex" {
+                format!(", workdir {}, read-only", self.chat.workdir)
+            } else {
+                String::new()
+            }
+        );
         self.chat.fresh = true;
         self.chat.editing = true;
         self.chat.errors.clear();
@@ -475,7 +483,17 @@ impl App {
         let age = usage["timestamp"]
             .as_f64()
             .map(|t| (chrono::Utc::now().timestamp() as f64 - t).max(0.) as u64);
-        let stale = !self.connected || usage["stale"] == true || age.is_none_or(|a| a >= 120);
+        let stale = if target == "codex" {
+            !self.connected
+                || chat["stale"] == true
+                || (!self.chat.id.is_empty()
+                    && self
+                        .received
+                        .get("chat")
+                        .is_none_or(|t| t.elapsed().as_secs() >= 120))
+        } else {
+            !self.connected || usage["stale"] == true || age.is_none_or(|a| a >= 120)
+        };
         let (credits, spend) = billing_lines(target, usage, chat, stale);
         f.render_widget(
             Paragraph::new(vec![
@@ -681,5 +699,43 @@ mod billing_tests {
         assert!(!format!("{a}{b}").contains('$') && b.contains("unavailable"));
         let (a, b) = billing_lines("hermes", &u, &Value::Null, true);
         assert!(a.contains("$10.00") && a.contains("STALE") && b.contains("$0.1000"));
+    }
+}
+
+#[cfg(test)]
+mod conversation_tests {
+    use super::*;
+    #[test]
+    fn new_conversations_reset_writes_and_explicit_target_always_starts_fresh() {
+        let (tx, _) = mpsc::unbounded_channel();
+        let mut app = App::new("test-config".into(), Some("Hermes chat".into()), tx);
+        app.chat.target = "codex".into();
+        app.chat.allow_writes = true;
+        app.chat.id = "old".into();
+        app.new_chat();
+        assert!(!app.chat.allow_writes && app.chat.id.is_empty());
+        app.chat.id = "another".into();
+        app.switch_target("codex");
+        assert!(app.chat.id.is_empty() && app.chat.confirmation.contains("read-only"));
+        assert_eq!(app.chat.target, "codex");
+    }
+}
+
+#[cfg(test)]
+mod workdir_tests {
+    use super::*;
+    #[test]
+    fn workdir_palette_command_routes_and_cannot_change_a_running_conversation() {
+        let (tx, _) = mpsc::unbounded_channel();
+        let mut app = App::new("test-workdir".into(), Some("Hermes chat".into()), tx);
+        app.palette = Some("Chat workdir: /tmp".into());
+        app.search_key(KeyCode::Enter, KeyModifiers::NONE);
+        assert!(app.palette.is_none());
+        assert_eq!(app.chat.workdir, "/tmp");
+        assert_eq!(app.chat.target, "codex");
+        app.chat.pending = true;
+        app.action("Chat workdir: /".into());
+        assert_eq!(app.chat.workdir, "/tmp");
+        assert!(app.chat.errors.last().unwrap().contains("finish"));
     }
 }

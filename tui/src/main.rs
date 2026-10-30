@@ -370,6 +370,17 @@ impl App {
                 "hermes"
             });
         } else if let Some(dir) = action.strip_prefix("Chat workdir: ") {
+            if self.chat.pending
+                || self
+                    .data
+                    .get("chat")
+                    .is_some_and(|v| v["status"] == "running")
+            {
+                self.chat
+                    .errors
+                    .push("Cancel or finish the turn before changing workdir".into());
+                return;
+            }
             self.new_chat();
             self.chat.workdir = dir.into();
             self.switch_target("codex");
@@ -522,10 +533,13 @@ impl App {
                     .as_array()
                     .map(|a| a.iter().filter_map(Value::as_u64).collect())
                     .unwrap_or_else(|| vec![855, 561, 4151]);
+                if !w.link.is_empty() && !ids.is_empty() {
+                    ids[0] = w.item;
+                }
                 if !ids.contains(&selection.item) && ids.len() < 5 {
                     ids.push(selection.item);
-                    w.set("ids", serde_json::json!(ids));
                 }
+                w.set("ids", serde_json::json!(ids));
             } else {
                 self.add("COMP".into());
                 let w = self.windows.last_mut().unwrap();
@@ -553,8 +567,10 @@ impl App {
                 .position(|w| w.view == "Candlestick chart" && w.link == source.link)
         };
         if let Some(pos) = existing {
-            self.windows[pos].item = selection.item;
-            self.windows[pos].set("offset", 0);
+            let mut chart = self.windows.remove(pos);
+            chart.item = selection.item;
+            chart.set("offset", 0);
+            self.windows.push(chart);
         } else {
             self.add("Candlestick chart".into());
             let w = self.windows.last_mut().unwrap();
@@ -565,9 +581,9 @@ impl App {
         self.item = selection.item;
         self.save();
     }
-    fn flush_click(&mut self) {
+    fn flush_click(&mut self) -> bool {
         if self.drag.is_some() || self.row_press.is_some() {
-            return;
+            return false;
         }
         if self
             .pending_click
@@ -576,7 +592,9 @@ impl App {
         {
             let c = self.pending_click.take().unwrap();
             self.chart_click(c.selection, false);
+            return true;
         }
+        false
     }
     fn rows(&self, key: &str) -> Vec<&Value> {
         self.data
@@ -639,6 +657,8 @@ impl App {
                     if focus { "◆" } else { "◇" },
                     if w.view == "Candlestick chart" {
                         "G / GP chart"
+                    } else if w.view == "Hermes chat" {
+                        "Agent chat"
                     } else {
                         &w.view
                     },
@@ -1617,7 +1637,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        app.flush_click();
+        dirty |= app.flush_click();
         let size = terminal.size()?;
         if app.width != size.width || app.height != size.height.saturating_sub(2) {
             app.clamp(size.width, size.height);

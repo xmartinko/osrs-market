@@ -270,3 +270,60 @@ mod app_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod link_click_tests {
+    use crate::*;
+    #[test]
+    fn linked_chart_selection_and_comparison_cap() {
+        let (tx, _) = mpsc::unbounded_channel();
+        let mut app = App::new("test-link-click".into(), Some("QM".into()), tx);
+        app.clamp(160, 50);
+        let mut source = app.windows[0].clone();
+        source.link = "red".into();
+        let mut chart = source.clone();
+        chart.id = 2;
+        chart.view = "Candlestick chart".into();
+        let mut other = chart.clone();
+        other.id = 3;
+        other.link = "blue".into();
+        other.item = 99;
+        let mut comp = source.clone();
+        comp.id = 4;
+        comp.view = "COMP".into();
+        comp.set("ids", serde_json::json!([1, 2, 3, 4]));
+        app.windows = vec![other, chart, comp, source];
+        app.next_id = 5;
+        let selection = |shift| RowPress {
+            press: interaction::Press {
+                x: 20,
+                y: 5,
+                moved: false,
+            },
+            window: 1,
+            row: 0,
+            item: 42,
+            shift,
+        };
+        app.chart_click(selection(false), false);
+        assert_eq!(app.windows.len(), 4);
+        assert!(
+            app.windows
+                .iter()
+                .filter(|w| w.link == "red")
+                .all(|w| w.item == 42)
+        );
+        assert_eq!(app.windows.iter().find(|w| w.id == 3).unwrap().item, 99);
+        let mut append = selection(true);
+        append.item = 77;
+        app.chart_click(append, false);
+        let mut overflow = selection(true);
+        overflow.item = 88;
+        app.chart_click(overflow, false);
+        let comp = app.windows.iter().find(|w| w.id == 4).unwrap();
+        let ids = comp.options["ids"].as_array().unwrap();
+        assert_eq!(ids.len(), 5);
+        assert!(ids.iter().any(|v| v == 42) && ids.iter().any(|v| v == 77));
+        assert!(!ids.iter().any(|v| v == 88));
+    }
+}

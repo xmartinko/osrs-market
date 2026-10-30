@@ -438,6 +438,9 @@ impl App {
                 } else if raw == "clear workspace" {
                     self.clear_workspace();
                     self.palette = None;
+                } else if raw.starts_with("Chat workdir: ") {
+                    self.palette = None;
+                    self.action(raw);
                 } else if self.terminal_command(&raw) {
                     self.palette = None;
                     self.save();

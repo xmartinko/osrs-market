@@ -84,6 +84,7 @@ pub fn translate(rect: Bounds, dx: i32, dy: i32, width: u16, height: u16) -> Bou
         height,
     )
 }
+#[cfg(test)]
 pub fn resize(rect: Bounds, dx: i32, dy: i32, width: u16, height: u16) -> Bounds {
     resize_handle(rect, Handle::BottomRight, dx, dy, width, height)
 }
