@@ -26,7 +26,7 @@ fn stamp(v: &Value) -> String {
 fn key(w: &Window) -> String {
     format!("terminal:{}", w.id)
 }
-fn is_panel(view: &str) -> bool {
+pub fn panel_view(view: &str) -> bool {
     ["TAS", "QM", "HCP", "HMAP", "MOST", "EQS", "COMP", "AL"].contains(&view)
 }
 
@@ -35,13 +35,13 @@ impl App {
         let keys = self
             .windows
             .iter()
-            .filter(|w| w.view == "Candlestick chart" || is_panel(&w.view))
+            .filter(|w| w.view == "Candlestick chart" || panel_view(&w.view))
             .map(key)
             .collect();
         let _ = self.commands.send(net::Command::TerminalWindows(keys));
         for w in &self.windows {
             let chart = w.view == "Candlestick chart";
-            if !chart && !is_panel(&w.view) {
+            if !chart && !panel_view(&w.view) {
                 continue;
             }
             let mut body = if w.options.is_object() {
@@ -145,7 +145,7 @@ impl App {
             self.undo_close();
             return true;
         }
-        if is_panel(action) {
+        if panel_view(action) {
             self.add(action.into());
             return true;
         }
@@ -300,7 +300,7 @@ impl App {
         if let Some(action) = alias {
             return self.terminal_action(action);
         }
-        if is_panel(raw) || raw == "HELP" {
+        if panel_view(raw) || raw == "HELP" {
             return self.terminal_action(raw);
         }
         if let Some(value) = raw.strip_prefix("item ") {
@@ -309,7 +309,7 @@ impl App {
                     if !self
                         .windows
                         .last()
-                        .is_some_and(|w| w.view == "Candlestick chart" || is_panel(&w.view))
+                        .is_some_and(|w| w.view == "Candlestick chart" || panel_view(&w.view))
                     {
                         self.add("Candlestick chart".into());
                     }
@@ -507,7 +507,7 @@ impl App {
         );
         f.render_widget(Clear, rect);
         let text = "F1 / Esc: dismiss help                         OSRS TERMINAL — SHORTCUTS\n\n` / Ctrl+P / /   Command palette (type aliases or commands; arrows + Enter choose)\nTab / Shift+Tab Cycle windows       click: focus/raise       m: fullscreen\nArrows / Shift+arrows: move         Alt+arrows: grow chosen edge; Ctrl+Alt+arrows: shrink chosen edge\nCtrl+Shift+arrows: snap to edge      Alt+Shift+arrows: resize to edge\nDrag title: move; any edge/corner (2 cells): resize      Ctrl+W / title × / double Esc: close\nCtrl+Z: undo last close             q / Ctrl+C: quit client (jobs continue)\nf: text filter; Enter finish; Esc clear    s: rank/color mode    j/k: scroll/select job
-Enter on market/TAS/QM/HCP/MOST/EQS tables: chart selected item and update linked ticker\n\nCHART   C: style picker   S / right click: scale menu   I: studies   R: range\n1: 5m   2: 15m   3: 30m   4: 1h   5: 1d   6: 1w   (no sub-5m data)\nWheel / +/-: time zoom   drag chart: pan   j/k: pan buckets   hover: inspect\nStyles: Candles, Bars, Line, Area, Baseline, Heikin Ashi, Hollow Candles,\n        Renko, Kagi, Point & Figure, Line Break\nScales: linear / percent / indexed / logarithmic; invert, axis left, auto fit, lock ratio
+Click any item table row (including Movers): chart; double click: independent chart; Shift+click: compare.\nEnter on market/Movers/TAS/QM/HCP/MOST/EQS tables: chart selected item and update linked ticker\n\nCHART   C: style picker   S / right click: scale menu   I: studies   R: range\n1: 5m   2: 15m   3: 30m   4: 1h   5: 1d   6: 1w   (no sub-5m data)\nWheel / +/-: time zoom   drag chart: pan   j/k: pan buckets   hover: inspect\nStyles: Candles, Bars, Line, Area, Baseline, Heikin Ashi, Hollow Candles,\n        Renko, Kagi, Point & Figure, Line Break\nScales: linear / percent / indexed / logarithmic; invert, axis left, auto fit, lock ratio
 Scale: price only excludes studies from auto-fit bounds. F1 help: j/k or PgUp/PgDn scroll.\nIndicators: SMA20 / EMA20 / BOLL20,2 / RSI14 / MACD12,26,9 / cumulative bucket VWAP\nRanges: 5y / 1y / 6m / 3m / 1m / 5d / 1d (independent of resolution)\n\nPALETTE COMMANDS\nG / GP / GPL: line   GIP: intraday   GPO: bars   GPC: candles   GPF: area\nitem 4151                 Set focused ticker; all same-colour windows follow\nLink: red|green|blue|yellow|magenta|none     Set focused window's link group\ndate 2025-01-15            Jump chart range end to UTC date\nbox 100                   Fixed box size for Renko / Kagi / P&F\nTAS / QM / HCP / HMAP / MOST / EQS / COMP / AL    Open a panel\nwatch 855,561,4151         Choose QM watchlist\ncompare 855,859,4151       Compare up to five items, exact common start = 100\nscreen spread=10 volume=100 alch=0 members=free limit=1:10000\nscreen reset              Clear composable EQS constraints\nalert price above 1000    Alert on focused ticker (price = latest side midpoint)\nalert spread below 10     Net spread threshold; alch_gap also supported\nalert delete 1            Delete saved alert; fired thresholds remain in AL\nmetric net_gp             Open job metric   c in Jobs: cancel selected job\nDataset / Track / Preset / Horizon: configure jobs; Start benchmark|eval|train|backtest\n\nCHAT Ctrl+T / target click: new conversation with Hermes or Codex.
 Palette: chat with Codex / chat with Hermes; Chat workdir: PATH; Chat: enable writes / read-only
 Codex defaults to read-only; header and each reply show workdir and mode.
@@ -862,11 +862,18 @@ Enter/i: edit; Enter: send; Alt+Enter/Ctrl+J: newline; Esc: leave input\nArrows/
                         Some(x) if x >= 0. => Color::Rgb(15, 83, 56),
                         _ => Color::Rgb(113, 31, 45),
                     };
-                    let x = area.x + (n(&cell["x"]) as u16).min(area.width);
-                    let y = area.y + 1 + (n(&cell["y"]) as u16).min(area.height - 2);
-                    let width = (n(&cell["width"]) as u16).min(area.right().saturating_sub(x));
-                    let height =
-                        (n(&cell["height"]) as u16).min(area.bottom().saturating_sub(y + 1));
+                    let Some(tile) = interaction::tile_bounds(
+                        Bounds {
+                            x: area.x,
+                            y: area.y,
+                            w: area.width,
+                            h: area.height,
+                        },
+                        cell,
+                    ) else {
+                        continue;
+                    };
+                    let (x, y, width, height) = (tile.x, tile.y, tile.w, tile.h);
                     if width > 0 && height > 0 {
                         f.render_widget(
                             Paragraph::new(format!(
@@ -902,9 +909,38 @@ Enter/i: edit; Enter: send; Alt+Enter/Ctrl+J: newline; Esc: leave input\nArrows/
                     )
                 })
                 .collect();
+            let table_rows = self.item_rows(w);
+            let visible = table_rows.len().saturating_sub(w.scroll).min(5) as u16;
+            f.render_widget(
+                Table::new(
+                    table_rows.into_iter().skip(w.scroll).take(5).map(|r| {
+                        Row::new([
+                            interaction::item_id(r)
+                                .map(|id| id.to_string())
+                                .unwrap_or_default(),
+                            val(&r["name"]),
+                        ])
+                    }),
+                    [Constraint::Length(12), Constraint::Min(10)],
+                )
+                .header(
+                    Row::new(["Item ID", "Comparison item"]).style(Style::default().fg(ACCENT)),
+                ),
+                Rect::new(
+                    area.x,
+                    area.y + 2,
+                    area.width,
+                    (visible + 1).min(area.height.saturating_sub(2)),
+                ),
+            );
+            let chart_y = area.y + 3 + visible;
+            let chart_height = area.bottom().saturating_sub(chart_y + 1);
+            if chart_height < 2 {
+                return;
+            }
             let all: Vec<_> = points.iter().flat_map(|(_, ps)| ps.iter()).collect();
             if all.is_empty() {
-                f.render_widget(Paragraph::new("No exact common observations. Use compare ID,ID; Resolution: 1w for deep history."),Rect::new(area.x,area.y+2,area.width,2));
+                f.render_widget(Paragraph::new("No exact common observations. Use compare ID,ID; Resolution: 1w for deep history."),Rect::new(area.x,chart_y,area.width,2));
                 return;
             }
             let xmin = n(&v["time_bounds"][0]);
@@ -946,7 +982,7 @@ Enter/i: edit; Enter: send; Alt+Enter/Ctrl+J: newline; Esc: leave input\nArrows/
                         val(&v["ticks"][2]),
                     ]))
                     .style(Style::default().bg(BG)),
-                Rect::new(area.x, area.y + 2, area.width, area.height - 4),
+                Rect::new(area.x, chart_y, area.width, chart_height),
             );
             f.render_widget(
                 Paragraph::new(format!(
@@ -1034,47 +1070,45 @@ Enter/i: edit; Enter: send; Alt+Enter/Ctrl+J: newline; Esc: leave input\nArrows/
                 ],
             ),
         };
-        let rows = v["data"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|r| w.view != "AL" || w.filter.is_empty() || r.to_string().contains(&w.filter))
-            .skip(w.scroll)
-            .map(|r| {
-                Row::new(
-                    fields
-                        .iter()
-                        .map(|field| {
-                            if *field == "timestamp" {
-                                stamp(&r[*field])
-                            } else if *field == "triggered" {
-                                if r[*field].is_null() {
-                                    "armed".into()
-                                } else {
-                                    format!(
-                                        "FIRED {}",
-                                        stamp(&serde_json::json!(n(&r[*field]) as i64))
-                                    )
-                                }
-                            } else if ["bid_time", "ask_time"].contains(field) {
-                                r[*field]
-                                    .as_i64()
-                                    .map(|t| format!("{}s", chrono::Utc::now().timestamp() - t))
-                                    .unwrap_or_else(|| "—".into())
-                            } else if *field == "trade_count" {
-                                "unavailable".into()
-                            } else if field.starts_with("change_") {
-                                r[*field]
-                                    .as_f64()
-                                    .map(|x| format!("{x:+.2}%"))
-                                    .unwrap_or_else(|| "—".into())
+        let rows = self.item_rows(w).into_iter().skip(w.scroll).map(|r| {
+            Row::new(
+                fields
+                    .iter()
+                    .map(|field| {
+                        if *field == "timestamp" {
+                            stamp(&r[*field])
+                        } else if *field == "triggered" {
+                            if r[*field].is_null() {
+                                "armed".into()
                             } else {
-                                val(&r[*field])
+                                format!("FIRED {}", stamp(&serde_json::json!(n(&r[*field]) as i64)))
                             }
-                        })
-                        .collect::<Vec<_>>(),
-                )
-            });
+                        } else if ["bid_time", "ask_time"].contains(field) {
+                            r[*field]
+                                .as_i64()
+                                .map(|t| format!("{}s", chrono::Utc::now().timestamp() - t))
+                                .unwrap_or_else(|| "—".into())
+                        } else if *field == "trade_count" {
+                            "unavailable".into()
+                        } else if field.starts_with("change_") {
+                            r[*field]
+                                .as_f64()
+                                .map(|x| format!("{x:+.2}%"))
+                                .unwrap_or_else(|| "—".into())
+                        } else {
+                            val(&r[*field])
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .style(Style::default().bg(
+                if w.options["selected_item"] == r["item_id"] {
+                    Color::DarkGray
+                } else {
+                    BG
+                },
+            ))
+        });
         let constraints: Vec<_> = fields
             .iter()
             .map(|field| {

@@ -1,6 +1,7 @@
 mod charts;
 mod chat;
 mod drag;
+mod interaction;
 mod net;
 mod profile;
 mod search;
@@ -149,6 +150,17 @@ struct Drag {
     pan: bool,
     offset: usize,
 }
+struct RowPress {
+    press: interaction::Press,
+    window: u64,
+    row: usize,
+    item: u64,
+    shift: bool,
+}
+struct PendingClick {
+    selection: RowPress,
+    at: Instant,
+}
 struct App {
     windows: Vec<Window>,
     closed: Vec<Vec<Window>>,
@@ -166,6 +178,8 @@ struct App {
     palette_index: usize,
     filtering: bool,
     drag: Option<Drag>,
+    row_press: Option<RowPress>,
+    pending_click: Option<PendingClick>,
     drag_scene: Option<drag::Scene>,
     width: u16,
     height: u16,
@@ -243,6 +257,8 @@ impl App {
             palette_index: 0,
             filtering: false,
             drag: None,
+            row_press: None,
+            pending_click: None,
             drag_scene: None,
             width: 0,
             height: 0,
@@ -272,6 +288,9 @@ impl App {
         }
         app
     }
+    #[cfg(test)]
+    fn save(&mut self) {}
+    #[cfg(not(test))]
     fn save(&mut self) {
         let path = layout_path();
         let result = (|| -> io::Result<()> {
@@ -409,21 +428,155 @@ impl App {
         self.save();
     }
     fn market_rows(&self, w: &Window) -> Vec<&Value> {
-        let mut rows = self.rows("prices/latest");
-        rows.retain(|r| {
-            r["name"]
-                .as_str()
-                .unwrap_or("")
-                .to_lowercase()
-                .contains(&w.filter.to_lowercase())
-        });
-        if w.sort == 1 {
-            rows.sort_by(|a, b| b["margin_gp"].as_i64().cmp(&a["margin_gp"].as_i64()));
+        self.item_rows(w)
+    }
+    fn item_rows(&self, w: &Window) -> Vec<&Value> {
+        let key = match w.view.as_str() {
+            "Market table" => "prices/latest".into(),
+            "Movers screener" => "prices/movers".into(),
+            _ => format!("terminal:{}", w.id),
+        };
+        self.data
+            .get(&key)
+            .map(|data| interaction::rows(&w.view, data, &w.filter, w.sort))
+            .unwrap_or_default()
+    }
+    fn row_item(&self, w: &Window, x: u16, y: u16) -> Option<(usize, u64)> {
+        if w.view == "HMAP" {
+            let v = self.data.get(&format!("terminal:{}", w.id))?;
+            for (i, cell) in v["cells"].as_array()?.iter().enumerate() {
+                let rect = interaction::tile_bounds(
+                    Bounds {
+                        x: w.rect.x + 1,
+                        y: w.rect.y + 1,
+                        w: w.rect.w.saturating_sub(2),
+                        h: w.rect.h.saturating_sub(2),
+                    },
+                    cell,
+                )?;
+                if rect.contains(x, y)
+                    && x > rect.x
+                    && y > rect.y
+                    && x + 1 < rect.x + rect.w
+                    && y + 1 < rect.y + rect.h
+                {
+                    return Some((i, cell["item"]["item_id"].as_u64()?));
+                }
+            }
+            return None;
         }
-        if w.sort == 2 {
-            rows.sort_by(|a, b| b["buy_price"].as_i64().cmp(&a["buy_price"].as_i64()));
+        if ![
+            "Market table",
+            "Movers screener",
+            "TAS",
+            "QM",
+            "HCP",
+            "MOST",
+            "EQS",
+            "COMP",
+            "AL",
+        ]
+        .contains(&w.view.as_str())
+        {
+            return None;
         }
-        rows
+        if terminal::panel_view(&w.view) && (w.rect.w < 12 || w.rect.h < 6) {
+            return None;
+        }
+        let rows = self.item_rows(w);
+        let headers = if ["Market table", "Movers screener"].contains(&w.view.as_str()) {
+            2
+        } else {
+            3
+        };
+        let footer = match w.view.as_str() {
+            "Market table" => 1,
+            "Movers screener" => 0,
+            _ => 2,
+        };
+        let count = if w.view == "COMP" {
+            rows.len().min(5)
+        } else {
+            rows.len()
+        };
+        let index = interaction::row_at(w.rect, x, y, headers, footer, w.scroll, count)?;
+        Some((index, interaction::item_id(rows.get(index)?)?))
+    }
+    fn chart_click(&mut self, selection: RowPress, new: bool) {
+        let Some(source) = self
+            .windows
+            .iter()
+            .find(|w| w.id == selection.window)
+            .cloned()
+        else {
+            return;
+        };
+        if selection.shift {
+            let pos = self
+                .windows
+                .iter()
+                .position(|w| w.view == "COMP" && w.link == source.link);
+            if let Some(pos) = pos {
+                let w = &mut self.windows[pos];
+                let mut ids: Vec<u64> = w.options["ids"]
+                    .as_array()
+                    .map(|a| a.iter().filter_map(Value::as_u64).collect())
+                    .unwrap_or_else(|| vec![855, 561, 4151]);
+                if !ids.contains(&selection.item) && ids.len() < 5 {
+                    ids.push(selection.item);
+                    w.set("ids", serde_json::json!(ids));
+                }
+            } else {
+                self.add("COMP".into());
+                let w = self.windows.last_mut().unwrap();
+                w.link = source.link;
+                w.set("ids", serde_json::json!([selection.item]));
+            }
+            self.save();
+            return;
+        }
+        if !new {
+            for w in &mut self.windows {
+                if w.id == source.id || !source.link.is_empty() && w.link == source.link {
+                    w.item = selection.item;
+                    if w.view == "Candlestick chart" {
+                        w.set("offset", 0);
+                    }
+                }
+            }
+        }
+        let existing = if new {
+            None
+        } else {
+            self.windows
+                .iter()
+                .position(|w| w.view == "Candlestick chart" && w.link == source.link)
+        };
+        if let Some(pos) = existing {
+            self.windows[pos].item = selection.item;
+            self.windows[pos].set("offset", 0);
+        } else {
+            self.add("Candlestick chart".into());
+            let w = self.windows.last_mut().unwrap();
+            w.item = selection.item;
+            // An independent double-click chart must not join the source link group.
+            w.link = if new { String::new() } else { source.link };
+        }
+        self.item = selection.item;
+        self.save();
+    }
+    fn flush_click(&mut self) {
+        if self.drag.is_some() || self.row_press.is_some() {
+            return;
+        }
+        if self
+            .pending_click
+            .as_ref()
+            .is_some_and(|c| c.at.elapsed() >= Duration::from_millis(300))
+        {
+            let c = self.pending_click.take().unwrap();
+            self.chart_click(c.selection, false);
+        }
     }
     fn rows(&self, key: &str) -> Vec<&Value> {
         self.data
@@ -629,11 +782,17 @@ impl App {
                 val(&r["margin_gp"]),
             ])
             .style(
-                Style::default().fg(if r["margin_gp"].as_i64().unwrap_or(0) > 0 {
-                    Color::Green
-                } else {
-                    Color::Red
-                }),
+                Style::default()
+                    .bg(if w.options["selected_item"] == r["item_id"] {
+                        Color::DarkGray
+                    } else {
+                        BG
+                    })
+                    .fg(if r["margin_gp"].as_i64().unwrap_or(0) > 0 {
+                        Color::Green
+                    } else {
+                        Color::Red
+                    }),
             )
         });
         let table = Table::new(
@@ -897,7 +1056,7 @@ impl App {
                 return false;
             }
         }
-        if focused == "Market table" && code == KeyCode::Enter {
+        if ["Market table", "Movers screener"].contains(&focused) && code == KeyCode::Enter {
             if let Some(w) = self.windows.last() {
                 if let Some(id) = self
                     .market_rows(w)
@@ -1044,6 +1203,7 @@ impl App {
         }
         match m.kind {
             MouseEventKind::Down(MouseButton::Left) => {
+                self.row_press = None;
                 let rects: Vec<_> = self.windows.iter().map(|w| w.rect).collect();
                 if let Some(i) = window::topmost(&rects, m.column, m.row) {
                     let w = self.windows.remove(i);
@@ -1051,6 +1211,22 @@ impl App {
                     if action != Some(Hit::Close) {
                         self.windows.push(w);
                         let rect = self.windows.last().unwrap().rect;
+                        if action == Some(Hit::Body) {
+                            let w = self.windows.last().unwrap();
+                            if let Some((row, item)) = self.row_item(w, m.column, m.row) {
+                                self.row_press = Some(RowPress {
+                                    press: interaction::Press {
+                                        x: m.column,
+                                        y: m.row,
+                                        moved: false,
+                                    },
+                                    window: w.id,
+                                    row,
+                                    item,
+                                    shift: m.modifiers.contains(KeyModifiers::SHIFT),
+                                });
+                            }
+                        }
                         if action == Some(Hit::Body)
                             && self.windows.last().is_some_and(|w| w.view == "Hermes chat")
                         {
@@ -1124,6 +1300,9 @@ impl App {
                 }
             }
             MouseEventKind::Drag(MouseButton::Left) => {
+                if let Some(p) = &mut self.row_press {
+                    p.press.motion(m.column, m.row);
+                }
                 if let (Some(d), Some(w)) = (&self.drag, self.windows.last_mut()) {
                     let (dx, dy) = (m.column as i32 - d.x as i32, m.row as i32 - d.y as i32);
                     if d.pan {
@@ -1140,6 +1319,40 @@ impl App {
                 }
             }
             MouseEventKind::Up(MouseButton::Left) => {
+                if self.drag.is_none() {
+                    if let Some(p) = self
+                        .row_press
+                        .take()
+                        .filter(|p| p.press.released(m.column, m.row))
+                    {
+                        if let Some(w) = self.windows.iter_mut().find(|w| w.id == p.window) {
+                            w.set("selected_row", p.row as u64);
+                            w.set("selected_item", p.item);
+                        }
+                        let double = self.pending_click.as_ref().is_some_and(|c| {
+                            c.at.elapsed() < Duration::from_millis(300)
+                                && c.selection.window == p.window
+                                && c.selection.item == p.item
+                                && c.selection.press.x.abs_diff(p.press.x) < 2
+                                && c.selection.press.y.abs_diff(p.press.y) < 2
+                        });
+                        if double {
+                            self.pending_click = None;
+                            self.chart_click(p, true);
+                        } else if p.shift {
+                            self.chart_click(p, false);
+                        } else {
+                            if let Some(old) = self.pending_click.take() {
+                                self.chart_click(old.selection, false);
+                            }
+                            self.pending_click = Some(PendingClick {
+                                selection: p,
+                                at: Instant::now(),
+                            });
+                        }
+                    }
+                }
+                self.row_press = None;
                 self.drag = None;
                 self.drag_scene = None;
                 self.save()
@@ -1404,6 +1617,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
+        app.flush_click();
         let size = terminal.size()?;
         if app.width != size.width || app.height != size.height.saturating_sub(2) {
             app.clamp(size.width, size.height);

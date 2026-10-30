@@ -45,7 +45,7 @@ F1 opens the complete, scrollable help overlay. Commands are entered in the pale
 | `f`, Enter, Esc | Edit table name filter, finish, clear |
 | `s` | Cycle table rank; HMAP toggles net margin / 1d change colour |
 | `j` / `k`, wheel | Scroll tables; select Jobs; chart j/k pans buckets |
-| Enter in market / TAS / QM / HCP / MOST / EQS | Chart selected row and update linked ticker |
+| Enter in market / Movers / TAS / QM / HCP / MOST / EQS | Chart selected row and update linked ticker |
 | **C / S / I / R** in chart | Style / scale / indicator / range picker |
 | Right click chart | Scale menu |
 | Wheel / `+` / `-` in chart | Zoom time axis |
@@ -345,3 +345,13 @@ Server settings: `OSRS_CODEX_BIN` (default `codex` on PATH),
 There is a global cap of one chat turn, including across server instances sharing
 the SQLite store. Ctrl+X/Ctrl+C cancels the child process group. Agent turns and
 stream events are persisted in SQLite outside git; no API key is needed for Codex.
+
+
+Single left click on an item row selects it and opens or retargets the chart for
+that link group. This covers Market, Movers, TAS, QM, HCP, MOST, EQS, AL and the
+COMP item list; HMAP cells also open their item. Headers, borders, footers and
+empty rows do nothing. Row mapping uses the painted filter, sort and scroll.
+Double click within 300 ms opens an independent chart, preserving existing charts.
+Shift+click appends to the link group's comparison set (maximum five unique IDs).
+A two-cell pointer movement cancels row selection, including a drag that returns
+to its starting position. Single clicks have a 300 ms double-click recognition delay.

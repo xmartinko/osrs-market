@@ -113,31 +113,28 @@ impl App {
             )),
             Rect::new(area.x, area.y, area.width, 1),
         );
-        let rows = self
-            .rows("prices/movers")
-            .into_iter()
-            .filter(|r| {
-                val(&r["name"])
-                    .to_lowercase()
-                    .contains(&w.filter.to_lowercase())
-            })
-            .skip(w.scroll)
-            .map(|r| {
-                Row::new([
-                    val(&r["item_id"]),
-                    val(&r["name"]),
-                    val(&r["price"]),
-                    format!("{:+.2}%", charts::num(&r["change_pct"])),
-                    val(&r["volume"]),
-                ])
-                .style(Style::default().fg(
-                    if charts::num(&r["change_pct"]) >= 0. {
+        let rows = self.item_rows(w).into_iter().skip(w.scroll).map(|r| {
+            Row::new([
+                val(&r["item_id"]),
+                val(&r["name"]),
+                val(&r["price"]),
+                format!("{:+.2}%", charts::num(&r["change_pct"])),
+                val(&r["volume"]),
+            ])
+            .style(
+                Style::default()
+                    .bg(if w.options["selected_item"] == r["item_id"] {
+                        Color::DarkGray
+                    } else {
+                        BG
+                    })
+                    .fg(if charts::num(&r["change_pct"]) >= 0. {
                         Color::Green
                     } else {
                         Color::Red
-                    },
-                ))
-            });
+                    }),
+            )
+        });
         f.render_widget(
             Table::new(
                 rows,
