@@ -1,6 +1,7 @@
 mod charts;
 mod chat;
 mod net;
+mod terminal;
 mod views;
 mod window;
 
@@ -27,6 +28,68 @@ use tokio::sync::mpsc;
 use window::{Bounds, Hit, Window};
 
 const VIEWS: &[&str] = &[
+    "G chart",
+    "GP chart",
+    "GIP intraday",
+    "GPO bars",
+    "GPL line",
+    "GPC candles",
+    "GPF area",
+    "TAS",
+    "QM",
+    "HCP",
+    "HMAP",
+    "MOST",
+    "EQS",
+    "COMP",
+    "AL",
+    "HELP",
+    "Style: Candles",
+    "Style: Bars",
+    "Style: Line",
+    "Style: Area",
+    "Style: Baseline",
+    "Style: Heikin Ashi",
+    "Style: Hollow Candles",
+    "Style: Renko",
+    "Style: Kagi",
+    "Style: Point & Figure",
+    "Style: Line Break",
+    "Scale: linear",
+    "Scale: percent",
+    "Scale: indexed",
+    "Scale: logarithmic",
+    "Scale: invert",
+    "Scale: axis left",
+    "Scale: auto fit",
+    "Scale: lock ratio",
+    "Scale: price only",
+    "Range: 5y",
+    "Range: 1y",
+    "Range: 6m",
+    "Range: 3m",
+    "Range: 1m",
+    "Range: 5d",
+    "Range: 1d",
+    "Resolution: 5m",
+    "Resolution: 15m",
+    "Resolution: 30m",
+    "Resolution: 1h",
+    "Resolution: 1d",
+    "Resolution: 1w",
+    "Indicator: SMA",
+    "Indicator: EMA",
+    "Indicator: BOLL",
+    "Indicator: RSI",
+    "Indicator: MACD",
+    "Indicator: VWAP",
+    "Link: none",
+    "Link: red",
+    "Link: green",
+    "Link: blue",
+    "Link: yellow",
+    "Link: magenta",
+    "Undo close",
     "Hermes chat",
     "Chat: new conversation",
     "Chat: next conversation",
@@ -74,9 +137,17 @@ struct Drag {
     x: u16,
     y: u16,
     resize: bool,
+    pan: bool,
+    offset: usize,
 }
 struct App {
     windows: Vec<Window>,
+    closed: Vec<Window>,
+    next_id: u64,
+    help: bool,
+    help_scroll: u16,
+    last_escape: Option<Instant>,
+    notice: String,
     data: HashMap<String, Value>,
     received: HashMap<String, Instant>,
     connected: bool,
@@ -90,7 +161,6 @@ struct App {
     server: String,
     commands: mpsc::UnboundedSender<net::Command>,
     item: u64,
-    tf: String,
     hover: Option<(u16, u16)>,
     selected_job: String,
     job_events: HashMap<String, Vec<Value>>,
@@ -117,7 +187,7 @@ impl App {
         view: Option<String>,
         commands: mpsc::UnboundedSender<net::Command>,
     ) -> Self {
-        let windows = if let Some(view) = view {
+        let mut windows = if let Some(view) = view {
             vec![Window {
                 view,
                 rect: Bounds {
@@ -129,6 +199,7 @@ impl App {
                 scroll: 0,
                 filter: String::new(),
                 sort: 0,
+                ..Window::default()
             }]
         } else {
             fs::read(layout_path())
@@ -148,6 +219,7 @@ impl App {
                             scroll: 0,
                             filter: String::new(),
                             sort: 0,
+                            ..Window::default()
                         },
                         Window {
                             view: "Alchemy gaps".into(),
@@ -160,6 +232,7 @@ impl App {
                             scroll: 0,
                             filter: String::new(),
                             sort: 0,
+                            ..Window::default()
                         },
                     ]
                 })
@@ -168,8 +241,21 @@ impl App {
             .ok()
             .and_then(|v| serde_json::from_slice(&v).ok())
             .unwrap_or(Value::Null);
+        for (i, w) in windows.iter_mut().enumerate() {
+            w.id = i as u64 + 1;
+            if w.item == 0 {
+                w.item = state["item"].as_u64().unwrap_or(855);
+            }
+        }
+        let next_id = windows.len() as u64 + 1;
         let app = Self {
             windows,
+            closed: vec![],
+            next_id,
+            help: false,
+            help_scroll: 0,
+            last_escape: None,
+            notice: String::new(),
             data: HashMap::new(),
             received: HashMap::new(),
             connected: false,
@@ -183,11 +269,6 @@ impl App {
             server: server.clone(),
             commands,
             item: state["item"].as_u64().unwrap_or(855),
-            tf: state["tf"]
-                .as_str()
-                .filter(|s| ["5m", "1h", "1d"].contains(s))
-                .unwrap_or("5m")
-                .into(),
             hover: None,
             selected_job: state["selected_job"].as_str().unwrap_or("").into(),
             job_events: HashMap::new(),
@@ -199,7 +280,6 @@ impl App {
             horizon: state["horizon"].as_u64().unwrap_or(1),
             chat: chat::ChatUi::new(&state, &server),
         };
-        app.history();
         if !app.chat.id.is_empty() {
             let _ = app
                 .commands
@@ -221,7 +301,7 @@ impl App {
                 serde_json::to_vec_pretty(&self.windows)?,
             )?;
             fs::rename(path.with_extension("tmp"), &path)?;
-            let state = serde_json::json!({"item":self.item,"tf":self.tf,"selected_job":self.selected_job,"metric":self.metric,"dataset":self.dataset,"track":self.track,"preset":self.preset,"horizon":self.horizon,"chat_id":self.chat.id,"chat_server":self.server});
+            let state = serde_json::json!({"item":self.item,"selected_job":self.selected_job,"metric":self.metric,"dataset":self.dataset,"track":self.track,"preset":self.preset,"horizon":self.horizon,"chat_id":self.chat.id,"chat_server":self.server});
             fs::write(
                 path.with_file_name("state.tmp"),
                 serde_json::to_vec(&state)?,
@@ -259,13 +339,17 @@ impl App {
             scroll: 0,
             filter: String::new(),
             sort: 0,
+            id: self.next_id,
+            item: self.windows.last().map(|w| w.item).unwrap_or(self.item),
+            link: self
+                .windows
+                .last()
+                .map(|w| w.link.clone())
+                .unwrap_or_default(),
+            ..Window::default()
         });
+        self.next_id += 1;
         self.save();
-    }
-    fn history(&self) {
-        let _ = self
-            .commands
-            .send(net::Command::History(self.item, self.tf.clone()));
     }
     fn choose_job(&mut self, id: String) {
         if id != self.selected_job {
@@ -276,6 +360,10 @@ impl App {
         }
     }
     fn action(&mut self, action: String) {
+        if self.terminal_action(&action) {
+            self.save();
+            return;
+        }
         if action == "Chat: new conversation" {
             self.new_chat();
         } else if action == "Chat: next conversation" {
@@ -372,8 +460,27 @@ impl App {
             f.render_widget(Clear, r);
             let block = Block::default()
                 .borders(Borders::ALL)
-                .title(format!(" {} {} ", if focus { "◆" } else { "◇" }, w.view))
-                .border_style(Style::default().fg(if focus { ACCENT } else { Color::DarkGray }))
+                .title(format!(
+                    " {} {} {} ",
+                    if focus { "◆" } else { "◇" },
+                    if w.view == "Candlestick chart" {
+                        "G / GP chart"
+                    } else {
+                        &w.view
+                    },
+                    if w.link.is_empty() {
+                        String::new()
+                    } else {
+                        format!("[{}:{}]", w.link, w.item)
+                    }
+                ))
+                .border_style(Style::default().fg(if !w.link.is_empty() {
+                    terminal::link_color(&w.link)
+                } else if focus {
+                    ACCENT
+                } else {
+                    Color::DarkGray
+                }))
                 .style(Style::default().bg(BG).fg(FG));
             let inner = block.inner(r);
             f.render_widget(block, r);
@@ -386,7 +493,10 @@ impl App {
             match w.view.as_str() {
                 "Market table" => self.market(f, inner, w),
                 "Alchemy gaps" => self.alchemy(f, inner, w),
-                "Candlestick chart" => self.candles(f, inner, w),
+                "Candlestick chart" => self.terminal_chart(f, inner, w),
+                "TAS" | "QM" | "HCP" | "HMAP" | "MOST" | "EQS" | "COMP" | "AL" => {
+                    self.terminal_panel(f, inner, w)
+                }
                 "Metric series" => charts::line(f, inner, &self.metric_points(), &self.metric),
                 "Jobs" => self.jobs(f, inner, w),
                 "Hermes chat" => self.chat_view(f, inner, w),
@@ -409,10 +519,21 @@ impl App {
             },
             self.server,
             self.windows.len(),
-            self.freshness("prices/latest")
+            format!("{} {}", self.alert_flash(), self.notice)
         );
         f.render_widget(
-            Paragraph::new(status).style(Style::default().bg(Color::Rgb(23, 40, 51)).fg(ACCENT)),
+            Paragraph::new(status).style(
+                Style::default()
+                    .bg(
+                        if !self.alert_flash().is_empty() && chrono::Utc::now().timestamp() % 2 == 0
+                        {
+                            Color::Rgb(120, 25, 25)
+                        } else {
+                            Color::Rgb(23, 40, 51)
+                        },
+                    )
+                    .fg(ACCENT),
+            ),
             Rect::new(0, area.height.saturating_sub(2), area.width, 1),
         );
         let help = if self.windows.last().is_some_and(|w| w.view == "Hermes chat")
@@ -422,12 +543,15 @@ impl App {
         } else if self.filtering {
             " Filter: type text · Enter finish · Esc clear"
         } else {
-            " / palette  Tab focus  arrows move  Shift+arrows resize  Ctrl+W close  m maximize  f filter  s sort  j/k scroll  q/Esc quit"
+            " ` / Ctrl+P palette  F1 help  Tab focus  C styles  S scales  I studies  R range  Ctrl+Z undo  q quit"
         };
         f.render_widget(
             Paragraph::new(help).style(Style::default().fg(Color::Gray)),
             Rect::new(0, area.height.saturating_sub(1), area.width, 1),
         );
+        if self.help {
+            self.draw_help(f, area);
+        }
         if let Some(query) = &self.palette {
             let width = 70.min(area.width);
             let height = 30.min(area.height);
@@ -445,7 +569,7 @@ impl App {
                     " dataset:{} track:{} {}h",
                     self.dataset, self.track, self.horizon
                 )),
-                Line::from(" Or type: item 4151 / metric net_gp"),
+                Line::from(" item ID / date YYYY-MM-DD / watch IDs / compare IDs"),
                 Line::from(""),
             ];
             for (i, name) in matches
@@ -614,7 +738,30 @@ impl App {
         );
     }
     fn key(&mut self, code: KeyCode, modifiers: KeyModifiers) -> bool {
-        if let Some(query) = &mut self.palette {
+        if code == KeyCode::F(1) {
+            self.help = !self.help;
+            self.palette = None;
+            if self.help {
+                self.help_scroll = 0;
+            }
+            return false;
+        }
+        if self.help {
+            match code {
+                KeyCode::Esc => self.help = false,
+                KeyCode::Char('j') | KeyCode::Down => {
+                    self.help_scroll = (self.help_scroll + 1).min(40)
+                }
+                KeyCode::Char('k') | KeyCode::Up => {
+                    self.help_scroll = self.help_scroll.saturating_sub(1)
+                }
+                KeyCode::PageDown => self.help_scroll = (self.help_scroll + 10).min(40),
+                KeyCode::PageUp => self.help_scroll = self.help_scroll.saturating_sub(10),
+                _ => {}
+            }
+            return false;
+        }
+        if let Some(mut query) = self.palette.clone() {
             match code {
                 KeyCode::Esc => self.palette = None,
                 KeyCode::Char(c) => {
@@ -626,21 +773,15 @@ impl App {
                     self.palette_index = 0
                 }
                 KeyCode::Down => {
-                    let n = VIEWS.iter().filter(|v| window::fuzzy(query, v)).count();
+                    let n = VIEWS.iter().filter(|v| window::fuzzy(&query, v)).count();
                     self.palette_index = (self.palette_index + 1).min(n.saturating_sub(1));
                 }
                 KeyCode::Up => self.palette_index = self.palette_index.saturating_sub(1),
                 KeyCode::Enter => {
-                    if let Some(value) = query
-                        .strip_prefix("item ")
-                        .and_then(|s| s.trim().parse::<u64>().ok())
-                        .filter(|i| *i > 0)
-                    {
-                        self.item = value;
-                        self.data.remove("history");
-                        self.history();
+                    let raw = query.clone();
+                    if self.terminal_command(&raw) {
                         self.palette = None;
-                        self.add("Candlestick chart".into());
+                        self.save();
                         return false;
                     }
                     if let Some(value) = query
@@ -655,7 +796,7 @@ impl App {
                     }
                     let selected = VIEWS
                         .iter()
-                        .filter(|v| window::fuzzy(query, v))
+                        .filter(|v| window::fuzzy(&query, v))
                         .nth(self.palette_index)
                         .map(|s| s.to_string());
                     self.palette = None;
@@ -664,6 +805,9 @@ impl App {
                     }
                 }
                 _ => {}
+            }
+            if self.palette.is_some() {
+                self.palette = Some(query);
             }
             return false;
         }
@@ -693,7 +837,8 @@ impl App {
             }
             return false;
         }
-        if code == KeyCode::Char('/')
+        if code == KeyCode::Char('`')
+            || code == KeyCode::Char('/')
             || code == KeyCode::Char('p') && modifiers.contains(KeyModifiers::CONTROL)
         {
             self.palette = Some(String::new());
@@ -702,19 +847,53 @@ impl App {
         }
         let focused = self.windows.last().map(|w| w.view.as_str()).unwrap_or("");
         if focused == "Candlestick chart" {
-            if let KeyCode::Char(c @ ('1' | '2' | '3')) = code {
-                self.tf = match c {
-                    '1' => "5m",
-                    '2' => "1h",
-                    _ => "1d",
-                }
-                .into();
-                self.data.remove("history");
+            let picker = match code {
+                KeyCode::Char('C') => Some("Style: "),
+                KeyCode::Char('S') => Some("Scale: "),
+                KeyCode::Char('I') => Some("Indicator: "),
+                KeyCode::Char('R') => Some("Range: "),
+                _ => None,
+            };
+            if let Some(prefix) = picker {
+                self.palette = Some(prefix.into());
+                self.palette_index = 0;
+                return false;
+            }
+            if let KeyCode::Char(c @ ('1' | '2' | '3' | '4' | '5' | '6')) = code {
                 if let Some(w) = self.windows.last_mut() {
-                    w.scroll = 0;
+                    w.set(
+                        "tf",
+                        match c {
+                            '1' => "5m",
+                            '2' => "15m",
+                            '3' => "30m",
+                            '4' => "1h",
+                            '5' => "1d",
+                            _ => "1w",
+                        },
+                    );
+                    w.set("offset", 0);
                 }
-                self.history();
                 self.save();
+                return false;
+            }
+            if matches!(code, KeyCode::Char('j' | 'k')) {
+                if let Some(w) = self.windows.last_mut() {
+                    let offset = w.options["offset"].as_u64().unwrap_or(0);
+                    w.set(
+                        "offset",
+                        if code == KeyCode::Char('j') {
+                            offset.saturating_add(1)
+                        } else {
+                            offset.saturating_sub(1)
+                        },
+                    );
+                }
+                self.save();
+                return false;
+            }
+            if matches!(code, KeyCode::Char('+' | '=' | '-')) {
+                self.zoom_chart(code != KeyCode::Char('-'));
                 return false;
             }
         }
@@ -725,11 +904,26 @@ impl App {
                     .get(w.scroll)
                     .and_then(|r| r["item_id"].as_u64())
                 {
-                    self.item = id;
-                    self.data.remove("history");
-                    self.history();
+                    self.set_ticker(id);
                     self.add("Candlestick chart".into());
                 }
+            }
+            return false;
+        }
+        if ["TAS", "QM", "HCP", "MOST", "EQS"].contains(&focused) && code == KeyCode::Enter {
+            let selected = self
+                .windows
+                .last()
+                .and_then(|w| {
+                    self.data
+                        .get(&format!("terminal:{}", w.id))
+                        .and_then(|v| v["data"].as_array())
+                        .and_then(|rows| rows.get(w.scroll))
+                })
+                .and_then(|r| r["item_id"].as_u64());
+            if let Some(id) = selected {
+                self.set_ticker(id);
+                self.add("Candlestick chart".into());
             }
             return false;
         }
@@ -762,7 +956,25 @@ impl App {
             }
         }
         match code {
-            KeyCode::Char('q') | KeyCode::Esc => return true,
+            KeyCode::Char('q') => return true,
+            KeyCode::Esc => {
+                if self
+                    .last_escape
+                    .is_some_and(|t| t.elapsed() < Duration::from_millis(500))
+                {
+                    self.close_focused();
+                    self.last_escape = None;
+                } else {
+                    self.last_escape = Some(Instant::now());
+                }
+            }
+            KeyCode::Char('z') if modifiers.contains(KeyModifiers::CONTROL) => self.undo_close(),
+            KeyCode::BackTab => {
+                if self.windows.len() > 1 {
+                    let w = self.windows.pop().unwrap();
+                    self.windows.insert(0, w);
+                }
+            }
             KeyCode::Tab => {
                 if self.windows.len() > 1 {
                     let w = self.windows.remove(0);
@@ -770,13 +982,15 @@ impl App {
                 }
             }
             KeyCode::Char('w') if modifiers.contains(KeyModifiers::CONTROL) => {
-                self.windows.pop();
+                self.close_focused();
             }
             KeyCode::Char('f') => self.filtering = true,
             _ => {
                 if let Some(w) = self.windows.last_mut() {
                     match code {
-                        KeyCode::Char('s') => w.sort = (w.sort + 1) % 3,
+                        KeyCode::Char('s') => {
+                            w.sort = (w.sort + 1) % if w.view == "HMAP" { 2 } else { 3 }
+                        }
                         KeyCode::Char('j') => w.scroll = w.scroll.saturating_add(1),
                         KeyCode::Char('k') => w.scroll = w.scroll.saturating_sub(1),
                         KeyCode::Char('m') => {
@@ -794,8 +1008,16 @@ impl App {
                                 KeyCode::Up => (0, -1),
                                 _ => (0, 1),
                             };
-                            w.rect = if modifiers.contains(KeyModifiers::SHIFT) {
+                            w.rect = if modifiers
+                                .contains(KeyModifiers::CONTROL | KeyModifiers::SHIFT)
+                            {
+                                window::edge(w.rect, dx, dy, self.width, self.height, false)
+                            } else if modifiers.contains(KeyModifiers::ALT | KeyModifiers::SHIFT) {
+                                window::edge(w.rect, dx, dy, self.width, self.height, true)
+                            } else if modifiers.contains(KeyModifiers::ALT) {
                                 window::resize(w.rect, dx, dy, self.width, self.height)
+                            } else if modifiers.contains(KeyModifiers::SHIFT) {
+                                window::translate(w.rect, dx, dy, self.width, self.height)
                             } else {
                                 window::translate(w.rect, dx, dy, self.width, self.height)
                             };
@@ -846,21 +1068,50 @@ impl App {
                                 }
                             }
                         }
-                        if matches!(action, Some(Hit::Title | Hit::Resize)) {
+                        if matches!(action, Some(Hit::Title | Hit::Resize))
+                            || action == Some(Hit::Body)
+                                && self
+                                    .windows
+                                    .last()
+                                    .is_some_and(|w| w.view == "Candlestick chart")
+                        {
                             self.drag = Some(Drag {
                                 rect,
                                 x: m.column,
                                 y: m.row,
                                 resize: action == Some(Hit::Resize),
+                                pan: action == Some(Hit::Body),
+                                offset: self.windows.last().unwrap().options["offset"]
+                                    .as_u64()
+                                    .unwrap_or(0) as usize,
                             });
                         }
+                    } else {
+                        self.closed.push(w);
                     }
                     self.save();
+                }
+            }
+            MouseEventKind::Down(MouseButton::Right) => {
+                let rects: Vec<_> = self.windows.iter().map(|w| w.rect).collect();
+                if let Some(i) = window::topmost(&rects, m.column, m.row) {
+                    if self.windows[i].view == "Candlestick chart" {
+                        let w = self.windows.remove(i);
+                        self.windows.push(w);
+                        self.palette = Some("Scale: ".into());
+                        self.palette_index = 0;
+                    }
                 }
             }
             MouseEventKind::Drag(MouseButton::Left) => {
                 if let (Some(d), Some(w)) = (&self.drag, self.windows.last_mut()) {
                     let (dx, dy) = (m.column as i32 - d.x as i32, m.row as i32 - d.y as i32);
+                    if d.pan {
+                        let bars = w.options["bars"].as_u64().unwrap_or(80).max(10) as i32;
+                        let delta = dx * bars / (w.rect.w.saturating_sub(14).max(1) as i32);
+                        w.set("offset", (d.offset as i32 + delta).max(0) as u64);
+                        return;
+                    }
                     w.rect = if d.resize {
                         window::resize(d.rect, dx, dy, self.width, self.height)
                     } else {
@@ -875,6 +1126,10 @@ impl App {
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
                 let rects: Vec<_> = self.windows.iter().map(|w| w.rect).collect();
                 if let Some(i) = window::topmost(&rects, m.column, m.row) {
+                    if self.windows[i].view == "Candlestick chart" {
+                        self.zoom_window(i, m.kind == MouseEventKind::ScrollUp);
+                        return;
+                    }
                     let w = &mut self.windows[i];
                     w.scroll = if (m.kind == MouseEventKind::ScrollUp) == (w.view != "Hermes chat")
                     {
@@ -918,6 +1173,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "collector" => "Collector health",
                         "metrics" => "Metric series",
                         "chat" => "Hermes chat",
+                        "TAS" | "QM" | "HCP" | "HMAP" | "MOST" | "EQS" | "COMP" | "AL" => {
+                            v.as_str()
+                        }
                         _ => return Err("unknown view".into()),
                     }
                     .into(),
@@ -1023,6 +1281,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if key == "health" {
                         app.connected = false;
                     }
+                    if key.starts_with("terminal:") && !app.data.contains_key(&key) {
+                        app.data
+                            .insert(key.clone(), serde_json::json!({"error":error,"stale":true}));
+                    }
                     if let Some(value) = app.data.get_mut(&key) {
                         value["stale"] = true.into();
                         value["error"] = error.clone().into();
@@ -1038,6 +1300,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if app.width != size.width || app.height != size.height.saturating_sub(2) {
             app.clamp(size.width, size.height);
         }
+        app.sync_terminal();
         terminal.draw(|f| app.draw(f))?;
         if event::poll(Duration::from_millis(100))? {
             match event::read()? {

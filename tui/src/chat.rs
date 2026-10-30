@@ -141,12 +141,25 @@ impl App {
                     self.chat.insert('\n');
                     return true;
                 }
-                KeyCode::Char('p' | 'w') => return false,
+                KeyCode::Char('p' | 'w' | 'z') => return false,
                 _ => {}
             }
         }
+        if matches!(code, KeyCode::Tab | KeyCode::BackTab | KeyCode::Char('`'))
+            || matches!(
+                code,
+                KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down
+            ) && (modifiers.contains(KeyModifiers::ALT)
+                || modifiers.contains(KeyModifiers::CONTROL | KeyModifiers::SHIFT))
+        {
+            return false;
+        }
         if code == KeyCode::Esc {
+            if !self.chat.editing {
+                return false;
+            }
             self.chat.editing = false;
+            self.last_escape = Some(Instant::now());
             return true;
         }
         if !self.chat.editing {

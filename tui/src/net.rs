@@ -13,7 +13,9 @@ pub enum Message {
     ChatStarted(Value),
 }
 pub enum Command {
-    History(u64, String),
+    Terminal(String, String, Value),
+    DeleteAlert(u64),
+    TerminalWindows(Vec<String>),
     Start(String, Value),
     Cancel(String),
     Watch(String),
@@ -67,6 +69,7 @@ pub fn connect(
         loop {
             let routes = [
                 "health",
+                "terminal/alerts",
                 "usage",
                 "chats",
                 "prices/latest",
@@ -94,11 +97,92 @@ pub fn connect(
         }
     });
     tokio::spawn(async move {
-        let mut history = None::<tokio::task::JoinHandle<()>>;
+        let mut terminal_tasks =
+            std::collections::HashMap::<String, (Value, tokio::task::JoinHandle<()>)>::new();
         let mut watch = None::<tokio::task::JoinHandle<()>>;
         let mut chat_watch = None::<tokio::task::JoinHandle<()>>;
         while let Some(command) = rx.recv().await {
             match command {
+                Command::TerminalWindows(keys) => {
+                    terminal_tasks.retain(|key, (_, task)| {
+                        let keep = keys.contains(key)
+                            || key.starts_with("alert-create:") && !task.is_finished();
+                        if !keep {
+                            task.abort();
+                        }
+                        keep
+                    });
+                }
+                Command::Terminal(key, route, body) => {
+                    if terminal_tasks
+                        .get(&key)
+                        .is_some_and(|(old, _)| old == &body)
+                    {
+                        continue;
+                    }
+                    if let Some((_, task)) = terminal_tasks.remove(&key) {
+                        task.abort();
+                    }
+                    let (client, server, tx) = (client.clone(), server.clone(), tx.clone());
+                    let saved = body.clone();
+                    let task_key = key.clone();
+                    let task = tokio::spawn(async move {
+                        loop {
+                            let result = client
+                                .post(format!("{server}/api/{route}"))
+                                .json(&body)
+                                .send()
+                                .await;
+                            match result {
+                                Ok(r) => {
+                                    let status = r.status();
+                                    match r.json::<Value>().await {
+                                        Ok(v) if status.is_success() => {
+                                            let _ = tx.send(Message::Data(task_key.clone(), v));
+                                        }
+                                        Ok(v) => {
+                                            let _ = tx.send(Message::Error(
+                                                task_key.clone(),
+                                                format!("{status}: {}", v["detail"]),
+                                            ));
+                                        }
+                                        Err(e) => {
+                                            let _ = tx.send(Message::Error(
+                                                task_key.clone(),
+                                                e.to_string(),
+                                            ));
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    let _ =
+                                        tx.send(Message::Error(task_key.clone(), e.to_string()));
+                                }
+                            }
+                            if tx.is_closed() || route == "terminal/alerts" {
+                                break;
+                            }
+                            tokio::time::sleep(Duration::from_secs(10)).await;
+                        }
+                    });
+                    terminal_tasks.insert(key, (saved, task));
+                }
+                Command::DeleteAlert(id) => {
+                    let (client, server, tx) = (client.clone(), server.clone(), tx.clone());
+                    tokio::spawn(async move {
+                        if let Err(e) = client
+                            .delete(format!("{server}/api/terminal/alerts/{id}"))
+                            .send()
+                            .await
+                        {
+                            let _ =
+                                tx.send(Message::Error("terminal/alerts".into(), e.to_string()));
+                        }
+                        send_data(&client, &server, "terminal/alerts", "terminal/alerts", &tx)
+                            .await;
+                    });
+                }
+
                 Command::ChatSend(body) => {
                     let (client, server, tx) = (client.clone(), server.clone(), tx.clone());
                     tokio::spawn(async move {
@@ -226,28 +310,6 @@ pub fn connect(
                         }
                     }));
                 }
-                Command::History(item, tf) => {
-                    if let Some(task) = history.take() {
-                        task.abort();
-                    }
-                    let (client, server, tx) = (client.clone(), server.clone(), tx.clone());
-                    history = Some(tokio::spawn(async move {
-                        loop {
-                            send_data(
-                                &client,
-                                &server,
-                                &format!("prices/{item}/history?tf={tf}&limit=120"),
-                                "history",
-                                &tx,
-                            )
-                            .await;
-                            if tx.is_closed() {
-                                break;
-                            }
-                            tokio::time::sleep(Duration::from_secs(15)).await;
-                        }
-                    }));
-                }
                 Command::Start(kind, params) => {
                     let (client, server, tx) = (client.clone(), server.clone(), tx.clone());
                     tokio::spawn(async move {
@@ -371,7 +433,7 @@ pub fn connect(
                 }
             }
         }
-        if let Some(task) = history {
+        for (_, (_, task)) in terminal_tasks {
             task.abort();
         }
         if let Some(task) = watch {

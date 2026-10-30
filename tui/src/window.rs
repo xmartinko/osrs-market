@@ -70,9 +70,17 @@ pub fn resize(rect: Bounds, dx: i32, dy: i32, width: u16, height: u16) -> Bounds
     )
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Window {
     pub view: String,
+    #[serde(default)]
+    pub id: u64,
+    #[serde(default = "default_item")]
+    pub item: u64,
+    #[serde(default)]
+    pub link: String,
+    #[serde(default)]
+    pub options: serde_json::Value,
     pub rect: Bounds,
     #[serde(default)]
     pub scroll: usize,
@@ -163,5 +171,84 @@ mod chart_tests {
         assert_eq!(chart_index(60, 10, 100, 80), 40);
         assert_eq!(chart_index(110, 10, 100, 80), 79);
         assert_eq!(chart_index(10, 10, 0, 0), 0);
+    }
+}
+
+fn default_item() -> u64 {
+    855
+}
+impl Window {
+    pub fn option(&self, key: &str, fallback: &str) -> String {
+        self.options[key].as_str().unwrap_or(fallback).to_string()
+    }
+    pub fn flag(&self, key: &str, fallback: bool) -> bool {
+        self.options[key].as_bool().unwrap_or(fallback)
+    }
+    pub fn set(&mut self, key: &str, value: impl Into<serde_json::Value>) {
+        if !self.options.is_object() {
+            self.options = serde_json::json!({});
+        }
+        self.options[key] = value.into();
+    }
+}
+
+pub fn edge(rect: Bounds, dx: i32, dy: i32, width: u16, height: u16, grow: bool) -> Bounds {
+    let mut r = rect;
+    if grow {
+        if dx < 0 {
+            r.w = r.w.saturating_add(r.x);
+            r.x = 0;
+        }
+        if dx > 0 {
+            r.w = width.saturating_sub(r.x);
+        }
+        if dy < 0 {
+            r.h = r.h.saturating_add(r.y);
+            r.y = 0;
+        }
+        if dy > 0 {
+            r.h = height.saturating_sub(r.y);
+        }
+    } else {
+        if dx < 0 {
+            r.x = 0;
+        }
+        if dx > 0 {
+            r.x = width.saturating_sub(r.w);
+        }
+        if dy < 0 {
+            r.y = 0;
+        }
+        if dy > 0 {
+            r.y = height.saturating_sub(r.h);
+        }
+    }
+    clamp(r, width, height)
+}
+#[cfg(test)]
+mod edge_tests {
+    use super::*;
+    #[test]
+    fn snap_and_resize_edges() {
+        let r = Bounds {
+            x: 10,
+            y: 5,
+            w: 30,
+            h: 10,
+        };
+        assert_eq!(edge(r, 1, 0, 100, 40, false).x, 70);
+        assert_eq!(edge(r, 0, 1, 100, 40, false).y, 30);
+        let v = edge(r, -1, 0, 100, 40, true);
+        assert_eq!((v.x, v.w), (0, 40));
+        assert_eq!(edge(r, 0, 1, 100, 40, true).h, 35);
+        assert_eq!(
+            edge(r, 1, 0, 2, 1, true),
+            Bounds {
+                x: 0,
+                y: 0,
+                w: 2,
+                h: 1
+            }
+        );
     }
 }
