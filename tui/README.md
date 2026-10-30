@@ -34,10 +34,10 @@ F1 opens the complete, scrollable help overlay. Commands are entered in the pale
 | F1 | Help; Esc dismisses; j/k, arrows and PageUp/PageDown scroll |
 | Tab / Shift+Tab | Cycle focus forward / backward |
 | Arrows / Shift+arrows | Move focused window |
-| Alt+arrows | Resize focused window |
+| Alt+arrows / Ctrl+Alt+arrows | Grow / shrink chosen left, right, top or bottom edge |
 | Ctrl+Shift+arrows | Snap focused window to an edge |
 | Alt+Shift+arrows | Resize focused window to an edge |
-| Drag title / bottom-right corner | Move / resize |
+| Drag title / any edge or corner (2-cell band) | Move / resize |
 | Ctrl+W / title × / double Esc | Close focused window |
 | Ctrl+Z | Undo last close, including ticker, links, geometry and studies |
 | `m` | Fullscreen |

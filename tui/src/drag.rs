@@ -51,7 +51,12 @@ impl Scene {
 }
 impl App {
     pub fn cache_drag(&mut self) {
-        if self.drag.as_ref().is_none_or(|d| d.pan) || self.drag_scene.is_some() {
+        if self
+            .drag
+            .as_ref()
+            .is_none_or(|d| d.pan || d.resize.is_some())
+            || self.drag_scene.is_some()
+        {
             return;
         }
         let Some(w) = self.windows.last() else { return };
@@ -105,7 +110,7 @@ mod tests {
             rect: app.windows[1].rect,
             x: 10,
             y: 3,
-            resize: false,
+            resize: None,
             pan: false,
             offset: 0,
         });

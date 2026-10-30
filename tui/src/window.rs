@@ -18,20 +18,48 @@ impl Bounds {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Hit {
     Close,
-    Resize,
+    Resize(Handle),
     Title,
     Body,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Handle {
+    Left,
+    Right,
+    Top,
+    Bottom,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
 }
 
 pub fn hit(rect: Bounds, x: u16, y: u16) -> Option<Hit> {
     if !rect.contains(x, y) {
         return None;
     }
-    if y == rect.y && x == rect.x + rect.w.saturating_sub(3) {
-        return Some(Hit::Close);
+    let left = x - rect.x < 2;
+    let right = rect.x.saturating_add(rect.w).saturating_sub(x) <= 2;
+    let top = y - rect.y < 2;
+    let bottom = rect.y.saturating_add(rect.h).saturating_sub(y) <= 2;
+    let handle = match (left, right, top, bottom) {
+        (true, _, true, _) => Some(Handle::TopLeft),
+        (_, true, true, _) => Some(Handle::TopRight),
+        (true, _, _, true) => Some(Handle::BottomLeft),
+        (_, true, _, true) => Some(Handle::BottomRight),
+        (true, _, _, _) => Some(Handle::Left),
+        (_, true, _, _) => Some(Handle::Right),
+        (_, _, _, true) => Some(Handle::Bottom),
+        // The center of the title row remains a move handle. Row below grabs top.
+        (_, _, true, _) if y != rect.y => Some(Handle::Top),
+        _ => None,
+    };
+    if let Some(h) = handle {
+        return Some(Hit::Resize(h));
     }
-    if x >= rect.x + rect.w.saturating_sub(2) && y >= rect.y + rect.h.saturating_sub(2) {
-        return Some(Hit::Resize);
+    if y == rect.y && x == rect.x.saturating_add(rect.w.saturating_sub(3)) {
+        return Some(Hit::Close);
     }
     Some(if y == rect.y { Hit::Title } else { Hit::Body })
 }
@@ -39,8 +67,8 @@ pub fn topmost(rects: &[Bounds], x: u16, y: u16) -> Option<usize> {
     rects.iter().rposition(|r| r.contains(x, y))
 }
 pub fn clamp(mut rect: Bounds, width: u16, height: u16) -> Bounds {
-    rect.w = rect.w.max(28).min(width);
-    rect.h = rect.h.max(8).min(height);
+    rect.w = rect.w.max(20).min(width);
+    rect.h = rect.h.max(6).min(height);
     rect.x = rect.x.min(width.saturating_sub(rect.w));
     rect.y = rect.y.min(height.saturating_sub(rect.h));
     rect
@@ -57,17 +85,65 @@ pub fn translate(rect: Bounds, dx: i32, dy: i32, width: u16, height: u16) -> Bou
     )
 }
 pub fn resize(rect: Bounds, dx: i32, dy: i32, width: u16, height: u16) -> Bounds {
-    let w = (rect.w as i32 + dx).clamp(28, u16::MAX as i32) as u16;
-    let h = (rect.h as i32 + dy).clamp(8, u16::MAX as i32) as u16;
-    clamp(
-        Bounds {
-            w: w.min(width.saturating_sub(rect.x)),
-            h: h.min(height.saturating_sub(rect.y)),
-            ..rect
-        },
-        width,
-        height,
-    )
+    resize_handle(rect, Handle::BottomRight, dx, dy, width, height)
+}
+/// Normalize a stale/off-screen rect first; anchor the edges that were not grabbed.
+pub fn resize_handle(
+    rect: Bounds,
+    handle: Handle,
+    dx: i32,
+    dy: i32,
+    width: u16,
+    height: u16,
+) -> Bounds {
+    use Handle::*;
+    let r = clamp(rect, width, height);
+    let (mut l, mut t, mut right, mut bottom) = (
+        r.x as i32,
+        r.y as i32,
+        (r.x + r.w) as i32,
+        (r.y + r.h) as i32,
+    );
+    let (mw, mh) = (20.min(width) as i32, 6.min(height) as i32);
+    if matches!(handle, Left | TopLeft | BottomLeft) {
+        l = (l + dx).clamp(0, right - mw);
+    }
+    if matches!(handle, Right | TopRight | BottomRight) {
+        right = (right + dx).clamp(l + mw, width as i32);
+    }
+    if matches!(handle, Top | TopLeft | TopRight) {
+        t = (t + dy).clamp(0, bottom - mh);
+    }
+    if matches!(handle, Bottom | BottomLeft | BottomRight) {
+        bottom = (bottom + dy).clamp(t + mh, height as i32);
+    }
+    Bounds {
+        x: l as u16,
+        y: t as u16,
+        w: (right - l) as u16,
+        h: (bottom - t) as u16,
+    }
+}
+/// Alt chooses the outward edge; Ctrl+Alt moves that same edge inward.
+pub fn keyboard_resize(
+    rect: Bounds,
+    dx: i32,
+    dy: i32,
+    inward: bool,
+    width: u16,
+    height: u16,
+) -> Bounds {
+    let h = if dx < 0 {
+        Handle::Left
+    } else if dx > 0 {
+        Handle::Right
+    } else if dy < 0 {
+        Handle::Top
+    } else {
+        Handle::Bottom
+    };
+    let sign = if inward { -1 } else { 1 };
+    resize_handle(rect, h, dx * sign, dy * sign, width, height)
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -113,9 +189,9 @@ mod tests {
     #[test]
     fn hit_regions() {
         assert_eq!(hit(r(), 57, 5), Some(Hit::Close));
-        assert_eq!(hit(r(), 59, 24), Some(Hit::Resize));
+        assert_eq!(hit(r(), 59, 24), Some(Hit::Resize(Handle::BottomRight)));
         assert_eq!(hit(r(), 20, 5), Some(Hit::Title));
-        assert_eq!(hit(r(), 20, 6), Some(Hit::Body));
+        assert_eq!(hit(r(), 20, 7), Some(Hit::Body));
         assert_eq!(hit(r(), 60, 10), None);
         assert_eq!(hit(r(), 10, 25), None);
     }
@@ -136,7 +212,7 @@ mod tests {
     #[test]
     fn resizing_and_tiny_terminal() {
         let v = resize(r(), -100, -100, 80, 30);
-        assert_eq!((v.w, v.h), (28, 8));
+        assert_eq!((v.w, v.h), (20, 6));
         let v = resize(r(), 100, 100, 80, 30);
         assert_eq!((v.x, v.y, v.w, v.h), (10, 5, 70, 25));
         assert_eq!(
@@ -296,5 +372,101 @@ mod workspace_tests {
         assert_eq!(closed.len(), 1);
         windows.extend(closed.pop().unwrap());
         assert_eq!(serde_json::to_vec(&windows).unwrap(), bytes);
+    }
+}
+
+#[cfg(test)]
+mod resize_tests {
+    use super::*;
+    const R: Bounds = Bounds {
+        x: 10,
+        y: 5,
+        w: 50,
+        h: 20,
+    };
+    #[test]
+    fn all_eight_handles_and_corner_priority() {
+        use Handle::*;
+        for (x, y, h) in [
+            (10, 10, Left),
+            (59, 10, Right),
+            (20, 6, Top),
+            (20, 24, Bottom),
+            (11, 6, TopLeft),
+            (58, 6, TopRight),
+            (11, 23, BottomLeft),
+            (58, 23, BottomRight),
+        ] {
+            assert_eq!(hit(R, x, y), Some(Hit::Resize(h)), "{h:?}");
+        }
+        assert_eq!(hit(R, 20, 5), Some(Hit::Title));
+    }
+    #[test]
+    fn each_edge_anchors_opposite_edge_and_clamps_minimum() {
+        use Handle::*;
+        let l = resize_handle(R, Left, 100, 100, 100, 40);
+        assert_eq!(
+            l,
+            Bounds {
+                x: 40,
+                y: 5,
+                w: 20,
+                h: 20
+            }
+        );
+        let t = resize_handle(R, Top, 100, 100, 100, 40);
+        assert_eq!(
+            t,
+            Bounds {
+                x: 10,
+                y: 19,
+                w: 50,
+                h: 6
+            }
+        );
+        for h in [Right, Bottom, TopLeft, TopRight, BottomLeft, BottomRight] {
+            let v = resize_handle(R, h, -100, -100, 100, 40);
+            assert!(v.w >= 20 && v.h >= 6 && v.x + v.w <= 100 && v.y + v.h <= 40);
+        }
+    }
+    #[test]
+    fn terminal_edges_offscreen_and_tiny_terminal() {
+        assert_eq!(
+            resize_handle(R, Handle::TopLeft, -100, -100, 80, 30),
+            Bounds {
+                x: 0,
+                y: 0,
+                w: 60,
+                h: 25
+            }
+        );
+        assert_eq!(
+            resize_handle(R, Handle::BottomRight, 100, 100, 80, 30),
+            Bounds {
+                x: 10,
+                y: 5,
+                w: 70,
+                h: 25
+            }
+        );
+        let off = Bounds { x: 70, y: 28, ..R };
+        assert_eq!(
+            resize_handle(off, Handle::Left, -5, 0, 80, 30),
+            Bounds {
+                x: 25,
+                y: 10,
+                w: 55,
+                h: 20
+            }
+        );
+        assert_eq!(
+            resize_handle(off, Handle::TopLeft, 999, 999, 2, 1),
+            Bounds {
+                x: 0,
+                y: 0,
+                w: 2,
+                h: 1
+            }
+        );
     }
 }

@@ -140,7 +140,7 @@ struct Drag {
     rect: Bounds,
     x: u16,
     y: u16,
-    resize: bool,
+    resize: Option<window::Handle>,
     pan: bool,
     offset: usize,
 }
@@ -446,7 +446,7 @@ impl App {
             let block = Block::default()
                 .borders(Borders::ALL)
                 .title(format!(
-                    " {} {} {} ",
+                    " {} {} {}{} ",
                     if focus { "◆" } else { "◇" },
                     if w.view == "Candlestick chart" {
                         "G / GP chart"
@@ -457,6 +457,11 @@ impl App {
                         String::new()
                     } else {
                         format!("[{}:{}]", w.link, w.item)
+                    },
+                    if focus && self.drag.as_ref().is_some_and(|d| d.resize.is_some()) {
+                        format!(" {}x{}", w.rect.w, w.rect.h)
+                    } else {
+                        String::new()
                     }
                 ))
                 .border_style(Style::default().fg(if !w.link.is_empty() {
@@ -958,7 +963,14 @@ impl App {
                             } else if modifiers.contains(KeyModifiers::ALT | KeyModifiers::SHIFT) {
                                 window::edge(w.rect, dx, dy, self.width, self.height, true)
                             } else if modifiers.contains(KeyModifiers::ALT) {
-                                window::resize(w.rect, dx, dy, self.width, self.height)
+                                window::keyboard_resize(
+                                    w.rect,
+                                    dx,
+                                    dy,
+                                    modifiers.contains(KeyModifiers::CONTROL),
+                                    self.width,
+                                    self.height,
+                                )
                             } else if modifiers.contains(KeyModifiers::SHIFT) {
                                 window::translate(w.rect, dx, dy, self.width, self.height)
                             } else {
@@ -1011,7 +1023,7 @@ impl App {
                                 }
                             }
                         }
-                        if matches!(action, Some(Hit::Title | Hit::Resize))
+                        if matches!(action, Some(Hit::Title | Hit::Resize(_)))
                             || action == Some(Hit::Body)
                                 && self
                                     .windows
@@ -1022,7 +1034,10 @@ impl App {
                                 rect,
                                 x: m.column,
                                 y: m.row,
-                                resize: action == Some(Hit::Resize),
+                                resize: match action {
+                                    Some(Hit::Resize(h)) => Some(h),
+                                    _ => None,
+                                },
                                 pan: action == Some(Hit::Body),
                                 offset: self.windows.last().unwrap().options["offset"]
                                     .as_u64()
@@ -1056,8 +1071,8 @@ impl App {
                         w.set("offset", (d.offset as i32 + delta).max(0) as u64);
                         return;
                     }
-                    w.rect = if d.resize {
-                        window::resize(d.rect, dx, dy, self.width, self.height)
+                    w.rect = if let Some(handle) = d.resize {
+                        window::resize_handle(d.rect, handle, dx, dy, self.width, self.height)
                     } else {
                         window::translate(d.rect, dx, dy, self.width, self.height)
                     };
