@@ -16,7 +16,7 @@ cargo run --release --locked --manifest-path tui/Cargo.toml -- --server http://1
 ```
 
 `--server` overrides `OSRS_TERM_SERVER`, default `http://127.0.0.1:8787`.
-`--view market|alchemy|candles|jobs|movers|models|collector|metrics` opens a single
+`--view market|alchemy|candles|jobs|movers|models|collector|metrics|chat|TAS|QM|HCP|HMAP|MOST|EQS|COMP|AL` opens a single
 window for inspection. Without it, the saved layout is restored. Configuration
 uses `$XDG_CONFIG_HOME/osrs-term` or `~/.config/osrs-term`; `layout.json` stores
 window positions/z-order and `state.json` stores selected chart/job/settings.
@@ -26,28 +26,71 @@ mouse capture and panic/normal-exit restoration.
 
 ## Controls
 
+F1 opens the complete, scrollable help overlay. Commands are entered in the palette.
+
 | Input | Action |
 |---|---|
-| `/`, Ctrl+P | Fuzzy command palette; Up/Down and Enter choose |
-| Palette `item 4151` | Open candles for an item ID |
-| Palette `metric net_gp` | Open a selected job metric series (any numeric metric key) |
-| Palette Dataset / Track / Preset / Horizon | Configure subsequent jobs |
-| Palette Start benchmark / eval / train / backtest | Submit a typed server job |
-| Click panel | Focus and raise |
-| Drag title / bottom-right 2×2 corner | Move / resize |
-| Click title × / Ctrl+W | Close window; its server job continues |
-| Wheel | Scroll the window under cursor without changing focus |
-| Tab | Cycle focus |
-| Arrows / Shift+Arrows | Move / resize focused window |
-| `m` | Maximize focused window |
-| `j` / `k` | Scroll; in Jobs, select next / previous job |
-| `f` | Table filter; Enter ends editing, Esc clears |
-| `s` | Market sort: item ID, net spread descending, buy descending |
-| Enter in Market | Chart the first visible item |
-| `1` / `2` / `3` in Candles | 5m / 1h / 1d |
-| Hover chart | Crosshair, timestamp, OHLC-ready values and volume |
-| `c` in Jobs | Cancel selected queued/running job |
-| q / Esc / Ctrl+C | Exit client; jobs stay on server |
+| `` ` ``, `/`, Ctrl+P | Command palette; arrows and Enter choose |
+| F1 | Help; Esc dismisses; j/k, arrows and PageUp/PageDown scroll |
+| Tab / Shift+Tab | Cycle focus forward / backward |
+| Arrows / Shift+arrows | Move focused window |
+| Alt+arrows | Resize focused window |
+| Ctrl+Shift+arrows | Snap focused window to an edge |
+| Alt+Shift+arrows | Resize focused window to an edge |
+| Drag title / bottom-right corner | Move / resize |
+| Ctrl+W / title × / double Esc | Close focused window |
+| Ctrl+Z | Undo last close, including ticker, links, geometry and studies |
+| `m` | Fullscreen |
+| `q` / Ctrl+C | Exit client; server jobs continue |
+| `f`, Enter, Esc | Edit table name filter, finish, clear |
+| `s` | Cycle table rank; HMAP toggles net margin / 1d change colour |
+| `j` / `k`, wheel | Scroll tables; select Jobs; chart j/k pans buckets |
+| Enter in market / TAS / QM / HCP / MOST / EQS | Chart selected row and update linked ticker |
+| **C / S / I / R** in chart | Style / scale / indicator / range picker |
+| Right click chart | Scale menu |
+| Wheel / `+` / `-` in chart | Zoom time axis |
+| Drag chart body | Pan time axis |
+| Hover chart | Mean, UTC timestamp and volume cursor |
+| `1` / `2` / `3` / `4` / `5` / `6` | 5m / 15m / 30m / 1h / 1d / 1w |
+| `c` in Jobs | Cancel selected job |
+
+Palette commands:
+
+```text
+G / GP / GPL             Line chart
+GIP                      5m intraday chart
+GPO / GPC / GPF           Bars / Candles / Area
+Style: Heikin Ashi        Any of the eleven named styles
+Scale: percent           linear / percent / indexed / logarithmic
+Scale: invert            Toggle scale inversion
+Scale: axis left         Toggle price-axis position
+Scale: auto fit          Toggle visible-range fit / frozen vertical bounds
+Scale: lock ratio        Lock price-to-bar geometry
+Scale: price only        Exclude/include overlays in auto-fit bounds
+Range: 5y                5y / 1y / 6m / 3m / 1m / 5d / 1d
+Resolution: 1w           Independent of the range
+Indicator: MACD          Toggle SMA / EMA / BOLL / RSI / MACD / VWAP
+item 4151                Change focused ticker and same-colour windows
+Link: red                red / green / blue / yellow / magenta / none
+date 2025-01-15          End the chart range at this UTC date
+box 100                  Fixed Renko / P&F box; Kagi reverses at 3 boxes
+TAS / QM / HCP / HMAP / MOST / EQS / COMP / AL
+watch 855,561,4151        Open/set QM watchlist
+compare 855,859,4151      Open/set comparison of up to five items
+screen spread=10 volume=100 alch=0 members=free limit=1:10000
+screen reset             Clear EQS constraints; s changes ranking
+alert price above 1000   Save one-shot threshold for focused ticker
+alert spread below 10    Also supports alch_gap; comparisons are inclusive
+alert delete 1           Remove an alert, armed or fired
+metric net_gp            Open a selected server job metric
+```
+
+Each window persists its own ticker, link colour and settings in `layout.json`.
+Joining a colour group publishes the focused ticker to that group. Changing a
+linked ticker updates other charts, makes TAS follow that item, includes it in
+QM, and replaces COMP's first item. Market-wide ranking and heatmap panels keep
+their universe while retaining the linked selection. Unlinked windows stay
+independent. A newly opened window inherits the focused ticker and colour.
 
 The palette also opens movers, alchemy, model results, collector health, research
 battery (71 rules × 3 participation assumptions), participation and log console.
@@ -65,12 +108,59 @@ mapping for one day. Each feed response includes error, stale, fetch time and ag
 Set `OSRS_DATA_DIR` to use another research directory (default
 `/home/martin/osrs-data`). No market observations or job databases belong in Git.
 
-Wiki history contains bucket averages, not trade OHLC. Candles are explicitly
-labelled **mean envelopes**: close is the side midpoint, open the previous
-midpoint, and the envelope includes both side means and open. These values are
-prepared by the server. Volume bars use the sum of reported side volumes. The
-movers screener uses the existing battery's exact 5m midpoint return, sorted by
-absolute change; missing preceding buckets stay absent.
+All eleven styles work with observed means: Line, Area, Baseline, Bars,
+Renko, Kagi, Point & Figure, Line Break, Candles, Hollow Candles and Heikin Ashi.
+Bars use close ticks. Renko uses two-box reversals, Kagi a three-box absolute
+reversal, P&F three-box reversals, and Line Break three preceding lines. The
+initial automatic box is max(visible price range / 30, first price × 0.002,
+0.01); `box N` fixes it. Event styles use event positions on their price axis.
+
+**No source contains trade-level OHLC.** Candles, Hollow Candles and Heikin Ashi
+therefore display **mean-envelope; NOT trade OHLC**. The 15m/30m/1h resolutions
+aggregate genuine 5m means using first/last/min/max; these are **OHLC of 5m
+means**, never labelled real trade OHLC. Open/high/low cannot be recovered from
+daily/weekly means or from a single 5m mean. There is no 1m mode or invented
+interpolation. Every chart header shows resolution and provenance; its footer
+shows actual observed bounds and source, including inferred/unknown intervals.
+
+Charts combine local `assembled-v3/daily.parquet`, weekly
+`ge-tracker-weekly-v1/weekly.parquet`, archived `forward/wiki/300s` observations,
+and recent Wiki timeseries as appropriate. Weekly history reaches back to 2017
+where available; selecting a long range at a finer resolution never fabricates
+older fine buckets. Ranges end at the latest available observation, or the UTC
+jump date. Gaps remain absent. The header reports the last loaded **mean**, change
+across the visible range and visible volume; it does not claim a last trade or
+session total. The countdown shows the next scheduled UTC bucket boundary and
+marks historical series.
+
+Python computes scales, transforms, indicator warmup from all loaded history,
+axis bounds, label collision groups and treemap rectangles. Rust renders that
+geometry. SMA/EMA use 20 observations; Bollinger uses 20 and two population
+standard deviations; RSI uses Wilder's 14-period recurrence; MACD is 12/26/9.
+RSI/MACD render in independent sub-panes. VWAP is cumulative volume-weighted
+**bucket mean** from the loaded start, not trade VWAP. Comparison uses exact
+common timestamps and rebases at the first visible common observation; it is
+mean-price change, without dividends or filled missing values.
+
+TAS contains aggregated 5m side events with side mean price and item quantity,
+not individual trades or market-centre information. The server deduplicates
+observed events and retains a day's tape in memory. QM's bid/ask are latest Wiki
+instant-sell/instant-buy proxies, with separate side ages, not order-book quotes.
+HCP compares against local daily means or Wiki 24h snapshots within two days of
+the requested lookback; absent references stay absent. HMAP sizes its top 32
+items by completed 5m quantity and colours by net spread or 1d change. MOST ranks
+item quantity and explicitly marks trade counts unavailable. EQS combines
+spread, quantity, alch gap, membership and buy-limit constraints; unknown values
+fail active constraints. Its alch cash gap assumes a fire staff and subtracts
+instant-buy and nature-rune cost; it excludes casting time and is distinct from
+the existing research alchemy panel's adverse-price assumptions.
+
+AL stores thresholds and one-shot trigger records in
+`$OSRS_DATA_DIR/server/terminal.sqlite`. A server task evaluates every five
+seconds even without clients, and skips stale responses or side quotes older
+than 15 minutes. Triggered alerts remain in AL and flash in the status line for
+60 seconds. No notifications leave the server. Alert state survives client and
+server restarts; the tape and close-undo stack are session-local.
 
 Market green/red spread is a hypothetical low purchase / high sale after the
 existing per-item tax. It is not an instant executable round trip. Alchemy shows
@@ -150,8 +240,11 @@ cargo test --locked --manifest-path tui/Cargo.toml
 cargo build --release --locked --manifest-path tui/Cargo.toml
 ```
 
-Window hit regions, topmost targeting, drag/resize clamping, fuzzy search and
-chart cursor arithmetic have pure unit tests. Server tests use fixture data,
+Chart mathematics, indicators, close-only transforms, comparisons, scales, label
+collisions and treemap tiling have pure Python unit tests. Historical adapters,
+composable filters, missing data, endpoints and durable alerts have integration
+tests. Rust tests cover hit regions, clamping, edge operations, linked tickers,
+undo restoration, chart geometry rendering and tiny terminals. Server tests use fixture data,
 mocked Wiki HTTP and real short subprocesses for success, failure, disconnect,
 replay, cancellation, queueing, timeout, restart and sealed-input guardrails.
 
