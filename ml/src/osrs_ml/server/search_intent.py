@@ -24,7 +24,11 @@ class Comparison(BaseModel):
 
 class Filter(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    text: str = Field("", max_length=2000)
+    text: str = Field(
+        "",
+        max_length=2000,
+        description="Only item names or descriptive search words. Exclude filter, membership, comparison, sort and limit prose.",
+    )
     members: bool | None = None
     comparisons: list[Comparison] = Field(default_factory=list, max_length=30)
     sort: FieldName | None = None
@@ -133,7 +137,7 @@ async def parse_intent(query: str, client=None):
                 messages=[
                     {
                         "role": "system",
-                        "content": "Convert item search intent to the supplied JSON schema. Only parse intent. Never generate items. Preserve item-name words in text. alch means alch_gap. sort is descending unless explicitly ascending. Return JSON only.",
+                        "content": "Convert item search intent to the supplied JSON schema. Only parse intent, never generate items. text MUST contain ONLY remaining item-name or descriptive words, NEVER membership, price, alchemy, limit or sort instructions. Strip filter prose completely. Examples: 'member boots under 500000 coins sorted by highest alchemy profit' becomes text='boots', members=true, comparisons=[{field:'price',op:'<',value:500000}], sort='alch_gap'. 'cheap free swords over 100 volume' becomes text='swords', members=false, comparisons=[{field:'volume',op:'>',value:100}], sort='price', descending=false. alch means alch_gap. Default limit=50. Default descending=true unless cheapest/ascending. Return JSON only.",
                     },
                     {"role": "user", "content": dsl.text},
                 ],

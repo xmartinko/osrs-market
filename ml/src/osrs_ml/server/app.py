@@ -8,6 +8,9 @@ from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnec
 from . import VERSION
 from .chat import Busy, ChatRequest, ChatRunner
 from .jobs import TERMINAL, JobRequest, Runner
+from .search import Search
+from .search_intent import Query as SearchQuery
+from .search_intent import parse_intent
 from .service import ML, Service
 from .terminal import AlertRequest, ChartRequest, PanelRequest, Terminal
 from .usage import Usage
@@ -20,6 +23,7 @@ def create_app(service=None, runner=None, chat=None, usage=None):
     chat = chat or ChatRunner(runner.store.path)
     usage = usage or Usage()
     terminal = Terminal(service)
+    search = Search(service, terminal)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -52,6 +56,21 @@ def create_app(service=None, runner=None, chat=None, usage=None):
 
     app.state.chat = chat
     app.state.usage = usage
+
+    @app.get("/api/search/catalogue")
+    def search_catalogue():
+        return search.catalogue()
+
+    @app.post("/api/search")
+    def search_results(request: SearchQuery):
+        try:
+            return search.results(request)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
+
+    @app.post("/api/search/parse")
+    async def search_parse(request: SearchQuery):
+        return await parse_intent(request.query)
 
     @app.get("/api/usage")
     async def credits():
