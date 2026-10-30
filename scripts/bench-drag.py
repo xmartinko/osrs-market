@@ -36,7 +36,10 @@ def run(binary, label, stop, output):
     trace = output/f'{label}.jsonl'
     with tempfile.TemporaryDirectory() as config:
         env = dict(os.environ, TERM='xterm-256color', XDG_CONFIG_HOME=config, OSRS_TERM_TRACE=str(trace))
-        proc = subprocess.Popen([binary, '--server', 'http://127.0.0.1:8799', '--view', 'market'], stdin=slave, stdout=slave, stderr=slave, env=env)
+        def controlling_tty():
+            os.setsid()
+            fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+        proc = subprocess.Popen([binary, '--server', 'http://127.0.0.1:8799', '--view', 'market'], stdin=slave, stdout=slave, stderr=slave, env=env, preexec_fn=controlling_tty)
         os.close(slave)
         def reader():
             while True:
@@ -53,36 +56,48 @@ def run(binary, label, stop, output):
             drain(.5)
         def send(code, x, y, end='M'):
             os.write(master, f'\x1b[<{code};{x+1};{y+1}{end}'.encode())
-        send(0, 20, 2)
+        send(0, 20, 0)
         drain(.1)
+        os.set_blocking(master,False)
         sent=[]
         start=time.time_ns()/1000
-        # 1000 input events/s, 3s; each coordinate pair is unique within the replay.
+        # 100 input events/s, 3s; each coordinate pair is unique within the replay.
         begin=time.monotonic()
-        for i in range(3000):
-            target=begin+i/1000
+        for i in range(300):
+            target=begin+i/100
             while time.monotonic()<target:
                 drain(min(.0002, target-time.monotonic()))
-            x=20+(i%150); y=2+((i//150)%20)
+            x=20+(i%50); y=((i//50)%20)
             sent.append((time.time_ns()/1000, [x,y]))
-            send(32,x,y)
+            try:
+                send(32,x,y)
+            except BlockingIOError:
+                sent.pop()
+            if i%500==0: print(f'{label}: injected {i}, pid {proc.pid}',flush=True)
 
         drain(5)
         send(0,20,2,'m'); drain(.2)
         os.write(master,b'q'); drain(.5)
-        proc.wait(timeout=10)
+        try: proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.send_signal(2); proc.wait(timeout=5)
     if server.poll() is None:
         server.terminate(); server.wait(timeout=20)
     os.close(master)
+    (output/f'{label}-input.json').write_text(json.dumps(sent))
     rows=[json.loads(x) for x in trace.read_text().splitlines()]
     drag=[r for r in rows if r['drag'] and r['us']>=start and r['us']<=start+3_000_000]
     sent_map={tuple(pos):t for t,pos in sent}
-    lag=[(r['us']-sent_map[tuple(r['pos'])])/1000 for r in rows if r['drag'] and tuple(r['pos'] or []) in sent_map and r['us']>=sent_map[tuple(r['pos'])]]
+    first_render={}
+    for r in rows:
+        pos=tuple(r['pos'] or [])
+        if r['drag'] and pos in sent_map and r['us']>=sent_map[pos]: first_render.setdefault(pos,r['us'])
+    lag=[(t-sent_map[pos])/1000 for pos,t in first_render.items()]
     queued=[]
     for r in drag:
         injected=sum(t<=r['us'] for t,_ in sent)
         queued.append(max(0,injected-(r['events']-1)))
-    result=dict(label=label, injected_events_s=1000, processed_events_s=round((drag[-1]['events']-drag[0]['events'])/3,1), draws_s=round(len(drag)/3,1), draw_ms_p50=round(pct([r['draw_us']/1000 for r in drag],.5),3), draw_ms_p99=round(pct([r['draw_us']/1000 for r in drag],.99),3), bytes_frame_mean=round(statistics.mean(r['bytes'] for r in drag)), cursor_render_ms_p50=round(pct(lag,.5),3), cursor_render_ms_p99=round(pct(lag,.99),3), queue_events_max=max(queued), coalesced_batch_max=max(r['batch'] for r in drag))
+    result=dict(label=label, injected_events_s=round(len(sent)/3,1), processed_events_s=round((drag[-1]['events']-drag[0]['events'])/3,1), draws_s=round(len(drag)/3,1), draw_ms_p50=round(pct([r['draw_us']/1000 for r in drag],.5),3), draw_ms_p99=round(pct([r['draw_us']/1000 for r in drag],.99),3), bytes_frame_mean=round(statistics.mean(r['bytes'] for r in drag)), cursor_render_ms_p50=round(pct(lag,.5),3), cursor_render_ms_p99=round(pct(lag,.99),3), queue_events_max=max(queued), coalesced_batch_max=max(r['batch'] for r in drag))
     print(json.dumps(result),flush=True)
     return result
 

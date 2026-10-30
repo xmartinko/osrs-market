@@ -1,5 +1,6 @@
 mod charts;
 mod chat;
+mod drag;
 mod net;
 mod profile;
 mod search;
@@ -160,6 +161,7 @@ struct App {
     palette_index: usize,
     filtering: bool,
     drag: Option<Drag>,
+    drag_scene: Option<drag::Scene>,
     width: u16,
     height: u16,
     server: String,
@@ -236,6 +238,7 @@ impl App {
             palette_index: 0,
             filtering: false,
             drag: None,
+            drag_scene: None,
             width: 0,
             height: 0,
             server: server.clone(),
@@ -417,6 +420,13 @@ impl App {
         }
     }
     fn draw(&self, f: &mut Frame) {
+        if let (Some(scene), Some(w)) = (&self.drag_scene, self.windows.last()) {
+            scene.draw(f, Rect::new(w.rect.x, w.rect.y, w.rect.w, w.rect.h));
+            return;
+        }
+        self.draw_full(f, false);
+    }
+    fn draw_full(&self, f: &mut Frame, skip_focused: bool) {
         let area = f.area();
         f.render_widget(Block::default().style(Style::default().bg(BG).fg(FG)), area);
         if self.windows.is_empty() {
@@ -427,6 +437,9 @@ impl App {
             );
         }
         for (i, w) in self.windows.iter().enumerate() {
+            if skip_focused && i + 1 == self.windows.len() {
+                continue;
+            }
             let r = Rect::new(w.rect.x, w.rect.y, w.rect.w, w.rect.h);
             let focus = i + 1 == self.windows.len();
             f.render_widget(Clear, r);
@@ -1052,6 +1065,7 @@ impl App {
             }
             MouseEventKind::Up(MouseButton::Left) => {
                 self.drag = None;
+                self.drag_scene = None;
                 self.save()
             }
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
@@ -1156,8 +1170,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _ = execute!(io::stdout(), DisableMouseCapture, LeaveAlternateScreen);
         previous(info);
     }));
-    loop {
+    let frame_time = Duration::from_micros(16_667);
+    let mut next_frame = Instant::now();
+    let mut last_draw = Instant::now();
+    let mut dirty = true;
+    let mut motion = None;
+    'running: loop {
         while let Ok(message) = rx.try_recv() {
+            dirty = true;
             match message {
                 net::Message::Catalogue(entries) => {
                     app.search.entries.retain(|e| {
@@ -1291,32 +1311,90 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if app.width != size.width || app.height != size.height.saturating_sub(2) {
             app.clamp(size.width, size.height);
         }
-        app.sync_terminal();
-        let started = Instant::now();
-        let before = bytes.load(std::sync::atomic::Ordering::Relaxed);
-        terminal.draw(|f| app.draw(f))?;
-        profiler.frame(started, bytes.load(std::sync::atomic::Ordering::Relaxed) - before, app.hover, app.drag.is_some());
-        if event::poll(Duration::from_millis(100))? {
-            match event::read()? {
-                Event::Key(k) if k.kind == event::KeyEventKind::Press => {
-                    if k.code == KeyCode::Char('c')
-                        && k.modifiers.contains(KeyModifiers::CONTROL)
-                        && !(app.chat.editing
-                            && app.windows.last().is_some_and(|w| w.view == "Hermes chat"))
-                        || app.key(k.code, k.modifiers)
-                    {
-                        app.save();
-                        break;
+        if Instant::now() >= next_frame && (dirty || last_draw.elapsed() >= Duration::from_secs(1))
+        {
+            if let Some(m) = motion.take() {
+                app.mouse(m);
+            }
+            if app.drag.is_none() {
+                app.sync_terminal();
+            }
+            let started = Instant::now();
+            let before = bytes.load(std::sync::atomic::Ordering::Relaxed);
+            terminal.draw(|f| app.draw(f))?;
+            profiler.frame(
+                started,
+                bytes.load(std::sync::atomic::Ordering::Relaxed) - before,
+                app.hover,
+                app.drag.is_some(),
+            );
+            last_draw = Instant::now();
+            next_frame = last_draw + frame_time;
+            dirty = false;
+        }
+        let timeout = if dirty {
+            next_frame.saturating_duration_since(Instant::now())
+        } else {
+            Duration::from_millis(50)
+        };
+        if !event::poll(timeout)? {
+            continue;
+        }
+        let batch_start = Instant::now();
+        loop {
+            let input = event::read()?;
+            if let Event::Mouse(m) = input {
+                profiler.events += 1;
+                profiler.pending += 1;
+                if matches!(m.kind, MouseEventKind::Moved | MouseEventKind::Drag(_)) {
+                    motion = Some(m);
+                    dirty = dirty
+                        || app.drag.is_some()
+                        || app
+                            .windows
+                            .last()
+                            .is_some_and(|w| w.view == "Candlestick chart");
+                } else {
+                    if let Some(last) = motion.take() {
+                        app.mouse(last);
                     }
+                    app.mouse(m);
+                    app.cache_drag();
+                    dirty = true;
                 }
-                Event::Mouse(m) => { profiler.events += 1; profiler.pending += 1; app.mouse(m) },
-                Event::Resize(w, h) => {
-                    app.clamp(w, h);
-                    app.save()
+            } else {
+                if let Some(last) = motion.take() {
+                    app.mouse(last);
                 }
-                _ => {}
+                app.drag_scene = None;
+                match input {
+                    Event::Key(k) if k.kind == event::KeyEventKind::Press => {
+                        if k.code == KeyCode::Char('c')
+                            && k.modifiers.contains(KeyModifiers::CONTROL)
+                            && !(app.chat.editing
+                                && app.windows.last().is_some_and(|w| w.view == "Hermes chat"))
+                            || app.key(k.code, k.modifiers)
+                        {
+                            app.save();
+                            break 'running;
+                        }
+                        dirty = true;
+                    }
+                    Event::Resize(w, h) => {
+                        app.drag = None;
+                        app.clamp(w, h);
+                        app.save();
+                        dirty = true;
+                    }
+                    _ => {}
+                }
+            }
+            // Bound input processing too, so continuous input cannot starve rendering.
+            if batch_start.elapsed() >= Duration::from_millis(2) || !event::poll(Duration::ZERO)? {
+                break;
             }
         }
     }
+
     Ok(())
 }
