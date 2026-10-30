@@ -42,3 +42,6 @@ ml/environments/**/.venv/
 *.parquet
 *.cbm
 *.sqlite*
+
+# Rust build artifacts
+tui/target/
