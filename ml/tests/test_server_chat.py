@@ -221,3 +221,52 @@ def test_credits_success_cache_stale_and_missing_key(tmp_path, monkeypatch):
         usage.invalidate()
         missing = client.get("/api/usage").json()
         assert missing["remaining"] is None and missing["timestamp"] is None
+
+
+def test_shared_store_lock_and_immediate_cancel(tmp_path, fake_hermes):
+    from osrs_ml.server.chat import Busy, ChatRequest
+
+    client, chat = make_client(tmp_path, fake_hermes)
+    with client:
+        other = ChatRunner(chat.store.path, binary="hermes")
+        result = client.post("/api/chat", json={"text": "slow"}).json()
+        with pytest.raises(Busy):
+            other.submit(ChatRequest(text="must not spawn"))
+        cancelled = client.post(f"/api/chat/{result['id']}/cancel").json()
+        assert cancelled["messages"][-1]["cancelled"]
+        assert cancelled["messages"][-1]["error"] == "Turn cancelled"
+        assert (
+            client.post("/api/chat", json={"chat_id": result["id"], "text": "retry"}).status_code
+            == 422
+        )
+        assert (
+            client.post(
+                "/api/chat",
+                json={"chat_id": result["id"], "text": "retry", "session": "20261030_010203_fake"},
+            ).status_code
+            == 202
+        )
+        assert wait(client, result["id"])["messages"][-1]["text"] == "remembered"
+
+
+def test_credits_key_limit_and_invalid_upstream(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-private-key")
+    invalid = False
+
+    def respond(request):
+        data = (
+            dict(total_credits="NaN" if invalid else 70, total_usage=62)
+            if request.url.path.endswith("credits")
+            else dict(limit=0, usage_daily=0.1, usage_weekly=1, usage_monthly=2)
+        )
+        return httpx.Response(200, json={"data": data})
+
+    usage = Usage(httpx.AsyncClient(transport=httpx.MockTransport(respond)))
+    with TestClient(create_app(fixture_service(tmp_path), usage=usage)) as client:
+        reading = client.get("/api/usage").json()
+        assert reading["hard_key_limit_set"] is True and reading["hard_key_limit"] == 0
+        invalid = True
+        usage.invalidate()
+        response = client.get("/api/usage")
+        assert response.status_code == 200
+        assert response.json()["stale"] and response.json()["remaining"] == 8

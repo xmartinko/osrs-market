@@ -1,6 +1,7 @@
 """Private OpenRouter credentials, cached public balance readings."""
 
 import asyncio
+import math
 import os
 import time
 from pathlib import Path
@@ -51,6 +52,20 @@ class Usage:
                 )
                 credits, info = [r.raise_for_status().json()["data"] for r in responses]
                 total, used = float(credits["total_credits"]), float(credits["total_usage"])
+                for number in [
+                    total,
+                    used,
+                    *(
+                        info.get(k)
+                        for k in ("usage_daily", "usage_weekly", "usage_monthly", "limit")
+                    ),
+                ]:
+                    if number is not None and (
+                        not isinstance(number, (int, float))
+                        or not math.isfinite(number)
+                        or number < 0
+                    ):
+                        raise ValueError("Invalid upstream balance")
                 self.reading = dict(
                     total_credits=total,
                     total_usage=used,

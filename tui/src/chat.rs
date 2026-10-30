@@ -472,3 +472,41 @@ mod tests {
         assert_eq!(safe_text("a\x1b[31m\0b"), "a[31mb");
     }
 }
+
+#[cfg(test)]
+mod input_tests {
+    use super::*;
+    #[test]
+    fn input_sends_multiline_argv_text_and_stays_cancellable() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let mut app = App::new("test-chat-input".into(), Some("Hermes chat".into()), tx);
+        while rx.try_recv().is_ok() {}
+        app.chat.id = "test-id".into();
+        for c in "first".chars() {
+            assert!(app.chat_key(KeyCode::Char(c), KeyModifiers::NONE));
+        }
+        app.chat_key(KeyCode::Char('j'), KeyModifiers::CONTROL);
+        for c in "écho".chars() {
+            app.chat_key(KeyCode::Char(c), KeyModifiers::NONE);
+        }
+        app.chat_key(KeyCode::Left, KeyModifiers::NONE);
+        app.chat_key(KeyCode::Backspace, KeyModifiers::NONE);
+        assert_eq!(app.chat.input, "first\néco");
+        app.chat_key(KeyCode::Enter, KeyModifiers::NONE);
+        match rx.try_recv().unwrap() {
+            net::Command::ChatSend(body) => {
+                assert_eq!(body["text"], "first\néco");
+                assert_eq!(body["chat_id"], "test-id");
+            }
+            _ => panic!("expected chat request"),
+        }
+        assert!(app.chat.pending);
+        app.chat_key(KeyCode::Char('x'), KeyModifiers::CONTROL);
+        assert!(matches!(rx.try_recv().unwrap(), net::Command::ChatCancel(id) if id == "test-id"));
+        app.chat_key(KeyCode::Esc, KeyModifiers::NONE);
+        assert!(!app.chat.editing);
+        assert_eq!(app.windows.len(), 1);
+        app.chat_key(KeyCode::Enter, KeyModifiers::NONE);
+        assert!(app.chat.editing);
+    }
+}

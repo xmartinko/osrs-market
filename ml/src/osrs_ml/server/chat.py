@@ -182,6 +182,8 @@ class ChatRunner:
         self.timeout = float(
             timeout if timeout is not None else os.getenv("OSRS_CHAT_TIMEOUT", "180")
         )
+        if not math.isfinite(self.timeout) or self.timeout <= 0:
+            raise ValueError("Chat timeout must be positive and finite")
         self.session = session or os.getenv("OSRS_HERMES_SESSION")
         if self.session and not re.fullmatch(SESSION, self.session):
             raise ValueError("Invalid configured Hermes session ID")
@@ -365,6 +367,8 @@ class ChatRunner:
         except Exception as exc:
             error = f"Hermes turn failed ({type(exc).__name__}): {exc}"
         finally:
+            if self.cancelled:
+                error = "Turn cancelled"
             self.store.finish(
                 chat_id, output.strip(), started, code, timed_out, self.cancelled, usage, error
             )
