@@ -8,7 +8,7 @@ import time
 import pytest
 from test_server_chat import make_client, wait
 
-from osrs_ml.server.chat import ChatRequest, codex_argv, parse_codex, route_target
+from osrs_ml.server.chat import ChatRequest, codex_argv, codex_turn_usage, parse_codex, route_target
 
 pytest_plugins = ["test_server_chat"]
 
@@ -41,7 +41,8 @@ if prompt == 'slow':
     pathlib.Path({str(tmp_path / "child.pid")!r}).write_text(str(child.pid))
     time.sleep(30)
 print(json.dumps({{"type":"item.completed","item":{{"type":"agent_message","text":'resumed' if 'resume' in args else prompt}}}}))
-print('{{"type":"turn.completed","usage":{{"input_tokens":21,"cached_input_tokens":10,"output_tokens":3}}}}')
+factor=2 if 'resume' in args else 1
+print(json.dumps({{"type":"turn.completed","usage":{{"input_tokens":21*factor,"cached_input_tokens":10*factor,"output_tokens":3*factor}}}}))
 ''')
     binary.chmod(0o755)
     monkeypatch.setenv("OSRS_CODEX_BIN", "codex")
@@ -79,7 +80,10 @@ def test_codex_resume_writes_switch_and_usage(tmp_path, fake_hermes, fake_codex)
         msg = first["messages"][-1]
         assert msg["text"] == prompt and msg["target"] == "codex"
         assert msg["workdir"] == str(tmp_path) and msg["sandbox"] == "read-only"
-        assert msg["usage"] == dict(input_tokens=21, cached_input_tokens=10, output_tokens=3)
+        assert msg["usage"]["reported_usage"] == dict(
+            input_tokens=21, cached_input_tokens=10, output_tokens=3
+        )
+        assert msg["usage"]["input_tokens"] == 21 and msg["usage"]["output_tokens"] == 3
         assert first["cost"] is None and "cost" not in msg["usage"]
         response = client.post(
             "/api/chat", json=dict(chat_id=first["id"], text="again", allow_writes=True)
@@ -87,6 +91,9 @@ def test_codex_resume_writes_switch_and_usage(tmp_path, fake_hermes, fake_codex)
         second = wait(client, response.json()["id"])
         assert second["agent_session"] == SID and second["messages"][-1]["text"] == "resumed"
         assert second["messages"][-1]["sandbox"] == "workspace-write"
+        usage = second["messages"][-1]["usage"]
+        assert usage["input_tokens"] == 21 and usage["output_tokens"] == 3
+        assert usage["reported_usage"]["input_tokens"] == 42
         calls = [json.loads(x) for x in (tmp_path / "argv.jsonl").read_text().splitlines()]
         assert "resume" not in calls[0] and SID in calls[1]
         assert calls[1][calls[1].index("-s") + 1] == "workspace-write"
@@ -148,3 +155,17 @@ def test_codex_validation():
     for kwargs in [dict(target="other"), dict(allow_writes="yes"), dict(workdir="a" * 4097)]:
         with pytest.raises(ValueError):
             ChatRequest(text="x", **kwargs)
+
+
+def test_codex_cumulative_usage_is_reported_as_turn_deltas():
+    first = dict(input_tokens=14212, cached_input_tokens=12288, output_tokens=9)
+    second = dict(input_tokens=29467, cached_input_tokens=24576, output_tokens=18)
+    assert codex_turn_usage(first)["input_tokens"] == 14212
+    delta = codex_turn_usage(second, first)
+    assert delta["input_tokens"] == 15255 and delta["output_tokens"] == 9
+    assert delta["cached_input_tokens"] == 12288 and delta["reported_usage"] == second
+    reset = codex_turn_usage(first, second)
+    assert "error" in reset and "input_tokens" not in reset
+
+    unknown_baseline = codex_turn_usage(second, {})
+    assert "error" in unknown_baseline and "input_tokens" not in unknown_baseline

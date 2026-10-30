@@ -361,3 +361,7 @@ available for moving; grab the row immediately below it to resize the top edge.
 Corners win over adjoining edges. The minimum window size is 20×6 (or the terminal
 size on smaller terminals); dragging displays dimensions in the title. Release
 saves the final rect atomically with the layout.
+
+Codex v0.165.0 emits cumulative session token counters. Transcript responses retain
+those in `usage.reported_usage` and derive per-turn deltas against the previous
+reading. Counter resets are marked incomplete rather than displayed as a turn count.

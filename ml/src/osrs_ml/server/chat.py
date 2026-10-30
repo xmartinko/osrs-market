@@ -124,6 +124,7 @@ def parse_codex(output, expected=None):
                 "input_tokens",
                 "output_tokens",
                 "cached_input_tokens",
+                "cache_write_input_tokens",
                 "reasoning_output_tokens",
                 "total_tokens",
             ):
@@ -139,6 +140,23 @@ def parse_codex(output, expected=None):
     if expected and session != expected:
         raise ValueError("Codex resumed a different session")
     return session, "\n".join(texts), usage
+
+
+def codex_turn_usage(reported, previous=None):
+    """v0.165.0 exec JSON reports cumulative session counters, including on resume.
+
+    Keep the original reading and derive a turn delta only with a valid baseline.
+    A counter reset is unknown usage, never negative tokens or a frozen value.
+    """
+    result = {"reported_usage": reported, "source": "codex-json", "scope": "turn"}
+    for key, value in reported.items():
+        if previous is None:
+            result[key] = value
+        elif key in previous and value >= previous[key]:
+            result[key] = value - previous[key]
+        else:
+            result["error"] = "Codex counter reset or baseline unavailable; turn usage incomplete"
+    return result
 
 
 class ChatStore(Store):
@@ -193,8 +211,18 @@ class ChatStore(Store):
                     "SELECT * FROM chat_messages WHERE chat_id=? ORDER BY id", (chat_id,)
                 )
             ]
+        previous_codex_usage = None
         for message in messages:
             message["usage"] = json.loads(message["usage"] or "{}")
+            if row["target"] == "codex" and message["role"] == "assistant":
+                if message["usage"]:
+                    reported = message["usage"].get("reported_usage", message["usage"])
+                    message["usage"] = codex_turn_usage(reported, previous_codex_usage)
+                    previous_codex_usage = reported
+                else:
+                    # An interrupted/missing reading prevents attributing the next delta
+                    # to a single turn. The following valid report reestablishes baseline.
+                    previous_codex_usage = {}
         costs = [m["usage"].get("cost") for m in messages if m["role"] == "assistant"]
         return {
             **dict(row),
