@@ -90,6 +90,7 @@ pub struct Window {
     pub sort: u8,
 }
 
+#[cfg(test)]
 pub fn fuzzy(query: &str, candidate: &str) -> bool {
     let mut chars = candidate.chars().flat_map(char::to_lowercase);
     query
@@ -250,5 +251,50 @@ mod edge_tests {
                 h: 1
             }
         );
+    }
+}
+
+/// Missing, corrupt, and explicitly empty layouts all restore to an empty workspace.
+pub fn decode_layout(bytes: Option<&[u8]>) -> Vec<Window> {
+    bytes
+        .and_then(|v| serde_json::from_slice(v).ok())
+        .unwrap_or_default()
+}
+pub fn clear_workspace(windows: &mut Vec<Window>, closed: &mut Vec<Vec<Window>>) {
+    if !windows.is_empty() {
+        closed.push(std::mem::take(windows));
+    }
+}
+#[cfg(test)]
+mod workspace_tests {
+    use super::*;
+    #[test]
+    fn launch_and_clear_restore_exact_windows() {
+        assert!(decode_layout(None).is_empty());
+        assert!(decode_layout(Some(b"garbage")).is_empty());
+        assert!(decode_layout(Some(b"[]")).is_empty());
+        let mut windows = vec![
+            Window {
+                view: "QM".into(),
+                item: 4151,
+                link: "red".into(),
+                ..Window::default()
+            },
+            Window {
+                view: "Candlestick chart".into(),
+                item: 11802,
+                link: "blue".into(),
+                ..Window::default()
+            },
+        ];
+        let bytes = serde_json::to_vec(&windows).unwrap();
+        assert_eq!(decode_layout(Some(&bytes))[0].item, 4151);
+        let mut closed = vec![];
+        clear_workspace(&mut windows, &mut closed);
+        assert!(windows.is_empty());
+        clear_workspace(&mut windows, &mut closed);
+        assert_eq!(closed.len(), 1);
+        windows.extend(closed.pop().unwrap());
+        assert_eq!(serde_json::to_vec(&windows).unwrap(), bytes);
     }
 }

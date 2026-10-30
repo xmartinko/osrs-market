@@ -84,12 +84,12 @@ impl App {
     }
     pub fn close_focused(&mut self) {
         if let Some(w) = self.windows.pop() {
-            self.closed.push(w);
+            self.closed.push(vec![w]);
         }
     }
     pub fn undo_close(&mut self) {
         if let Some(w) = self.closed.pop() {
-            self.windows.push(w);
+            self.windows.extend(w);
         }
     }
     pub fn set_ticker(&mut self, item: u64) {

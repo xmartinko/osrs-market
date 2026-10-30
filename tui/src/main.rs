@@ -2,6 +2,8 @@ mod charts;
 mod chat;
 mod net;
 mod profile;
+mod search;
+mod search_ui;
 mod terminal;
 mod views;
 mod window;
@@ -143,7 +145,8 @@ struct Drag {
 }
 struct App {
     windows: Vec<Window>,
-    closed: Vec<Window>,
+    closed: Vec<Vec<Window>>,
+    search: search_ui::SearchUi,
     next_id: u64,
     help: bool,
     help_scroll: u16,
@@ -203,40 +206,7 @@ impl App {
                 ..Window::default()
             }]
         } else {
-            fs::read(layout_path())
-                .ok()
-                .and_then(|s| serde_json::from_slice::<Vec<Window>>(&s).ok())
-                .filter(|w| !w.is_empty())
-                .unwrap_or_else(|| {
-                    vec![
-                        Window {
-                            view: "Market table".into(),
-                            rect: Bounds {
-                                x: 1,
-                                y: 1,
-                                w: 116,
-                                h: 34,
-                            },
-                            scroll: 0,
-                            filter: String::new(),
-                            sort: 0,
-                            ..Window::default()
-                        },
-                        Window {
-                            view: "Alchemy gaps".into(),
-                            rect: Bounds {
-                                x: 70,
-                                y: 25,
-                                w: 118,
-                                h: 16,
-                            },
-                            scroll: 0,
-                            filter: String::new(),
-                            sort: 0,
-                            ..Window::default()
-                        },
-                    ]
-                })
+            window::decode_layout(fs::read(layout_path()).ok().as_deref())
         };
         let state: Value = fs::read(layout_path().with_file_name("state.json"))
             .ok()
@@ -252,6 +222,7 @@ impl App {
         let app = Self {
             windows,
             closed: vec![],
+            search: search_ui::SearchUi::load(),
             next_id,
             help: false,
             help_scroll: 0,
@@ -450,7 +421,7 @@ impl App {
         f.render_widget(Block::default().style(Style::default().bg(BG).fg(FG)), area);
         if self.windows.is_empty() {
             f.render_widget(
-                Paragraph::new("  OSRS TERM   / opens the command palette")
+                Paragraph::new("  Press / or Ctrl+K to add a window · 1 recent  2 pin  3 top movers  4 alch gaps")
                     .style(Style::default().fg(ACCENT)),
                 area,
             );
@@ -492,6 +463,12 @@ impl App {
                 );
             }
             match w.view.as_str() {
+                "Doc viewer" => f.render_widget(
+                    Paragraph::new(w.option("body", "").to_string())
+                        .wrap(Wrap { trim: false })
+                        .scroll((w.scroll as u16, 0)),
+                    inner,
+                ),
                 "Market table" => self.market(f, inner, w),
                 "Alchemy gaps" => self.alchemy(f, inner, w),
                 "Candlestick chart" => self.terminal_chart(f, inner, w),
@@ -537,8 +514,9 @@ impl App {
             ),
             Rect::new(0, area.height.saturating_sub(2), area.width, 1),
         );
-        let help = if self.windows.last().is_some_and(|w| w.view == "Hermes chat")
-            && self.chat.editing
+        let help = if self.windows.is_empty() {
+            ""
+        } else if self.windows.last().is_some_and(|w| w.view == "Hermes chat") && self.chat.editing
         {
             " Enter send  Alt+Enter/Ctrl+J newline  Ctrl+X cancel  Esc leave input  Ctrl+P palette  Tab focus  Ctrl+W close"
         } else if self.filtering {
@@ -553,52 +531,11 @@ impl App {
         if self.help {
             self.draw_help(f, area);
         }
-        if let Some(query) = &self.palette {
-            let width = 70.min(area.width);
-            let height = 30.min(area.height);
-            let rect = Rect::new(
-                area.width.saturating_sub(width) / 2,
-                area.height.saturating_sub(height) / 2,
-                width,
-                height,
-            );
-            f.render_widget(Clear, rect);
-            let matches: Vec<_> = VIEWS.iter().filter(|v| window::fuzzy(query, v)).collect();
-            let mut lines = vec![
-                Line::from(format!(" > {query}_")),
-                Line::from(format!(
-                    " dataset:{} track:{} {}h",
-                    self.dataset, self.track, self.horizon
-                )),
-                Line::from(" item ID / date YYYY-MM-DD / watch IDs / compare IDs"),
-                Line::from(""),
-            ];
-            for (i, name) in matches
-                .iter()
-                .enumerate()
-                .skip(self.palette_index.saturating_sub(19))
-                .take(22)
-            {
-                lines.push(Line::styled(
-                    format!(
-                        " {} {name}",
-                        if i == self.palette_index { "▶" } else { " " }
-                    ),
-                    Style::default().fg(if i == self.palette_index { ACCENT } else { FG }),
-                ));
-            }
-            f.render_widget(
-                Paragraph::new(lines)
-                    .block(
-                        Block::default()
-                            .borders(Borders::ALL)
-                            .title(" Command palette "),
-                    )
-                    .style(Style::default().bg(BG).fg(FG)),
-                rect,
-            );
+        if self.palette.is_some() {
+            self.draw_search(f, area);
         }
     }
+
     fn market(&self, f: &mut Frame, area: Rect, w: &Window) {
         if area.height < 2 {
             return;
@@ -762,57 +699,12 @@ impl App {
             }
             return false;
         }
-        if let Some(mut query) = self.palette.clone() {
-            match code {
-                KeyCode::Esc => self.palette = None,
-                KeyCode::Char(c) => {
-                    query.push(c);
-                    self.palette_index = 0
-                }
-                KeyCode::Backspace => {
-                    query.pop();
-                    self.palette_index = 0
-                }
-                KeyCode::Down => {
-                    let n = VIEWS.iter().filter(|v| window::fuzzy(&query, v)).count();
-                    self.palette_index = (self.palette_index + 1).min(n.saturating_sub(1));
-                }
-                KeyCode::Up => self.palette_index = self.palette_index.saturating_sub(1),
-                KeyCode::Enter => {
-                    let raw = query.clone();
-                    if self.terminal_command(&raw) {
-                        self.palette = None;
-                        self.save();
-                        return false;
-                    }
-                    if let Some(value) = query
-                        .strip_prefix("metric ")
-                        .map(str::trim)
-                        .filter(|s| !s.is_empty())
-                    {
-                        self.metric = value.into();
-                        self.palette = None;
-                        self.add("Metric series".into());
-                        return false;
-                    }
-                    let selected = VIEWS
-                        .iter()
-                        .filter(|v| window::fuzzy(&query, v))
-                        .nth(self.palette_index)
-                        .map(|s| s.to_string());
-                    self.palette = None;
-                    if let Some(v) = selected {
-                        self.action(v)
-                    }
-                }
-                _ => {}
-            }
-            if self.palette.is_some() {
-                self.palette = Some(query);
-            }
+        if self.palette.is_some() {
+            self.search_key(code, modifiers);
             return false;
         }
         if self.windows.last().is_some_and(|w| w.view == "Hermes chat")
+            && !(code == KeyCode::Char('k') && modifiers.contains(KeyModifiers::CONTROL))
             && self.chat_key(code, modifiers)
         {
             return false;
@@ -840,11 +732,47 @@ impl App {
         }
         if code == KeyCode::Char('`')
             || code == KeyCode::Char('/')
-            || code == KeyCode::Char('p') && modifiers.contains(KeyModifiers::CONTROL)
+            || matches!(code, KeyCode::Char('p' | 'k')) && modifiers.contains(KeyModifiers::CONTROL)
         {
             self.palette = Some(String::new());
             self.palette_index = 0;
+            self.search_changed();
             return false;
+        }
+        if self.windows.is_empty() {
+            match code {
+                KeyCode::Char('1' | '2') => {
+                    let key = if code == KeyCode::Char('1') {
+                        self.search.prefs.recent.first()
+                    } else {
+                        self.search.prefs.pins.first()
+                    }
+                    .cloned();
+                    if let Some(key) = key {
+                        self.palette = Some(String::new());
+                        self.search_changed();
+                        if let Some(i) = self
+                            .search
+                            .hits
+                            .iter()
+                            .position(|h| self.search.entries[h.entry].key == key)
+                        {
+                            self.palette_index = i;
+                            self.search_key(KeyCode::Enter, KeyModifiers::empty());
+                        }
+                    }
+                    return false;
+                }
+                KeyCode::Char('3') => {
+                    self.add("Movers screener".into());
+                    return false;
+                }
+                KeyCode::Char('4') => {
+                    self.add("Alchemy gaps".into());
+                    return false;
+                }
+                _ => {}
+            }
         }
         let focused = self.windows.last().map(|w| w.view.as_str()).unwrap_or("");
         if focused == "Candlestick chart" {
@@ -858,6 +786,7 @@ impl App {
             if let Some(prefix) = picker {
                 self.palette = Some(prefix.into());
                 self.palette_index = 0;
+                self.search_changed();
                 return false;
             }
             if let KeyCode::Char(c @ ('1' | '2' | '3' | '4' | '5' | '6')) = code {
@@ -1088,7 +1017,7 @@ impl App {
                             });
                         }
                     } else {
-                        self.closed.push(w);
+                        self.closed.push(vec![w]);
                     }
                     self.save();
                 }
@@ -1101,6 +1030,7 @@ impl App {
                         self.windows.push(w);
                         self.palette = Some("Scale: ".into());
                         self.palette_index = 0;
+                        self.search_changed();
                     }
                 }
             }
@@ -1158,8 +1088,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut server =
         std::env::var("OSRS_TERM_SERVER").unwrap_or_else(|_| "http://127.0.0.1:8787".into());
     let mut view = None;
+    let mut inspect_query = None;
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--search" => inspect_query = Some(args.next().ok_or("--search requires query")?),
             "--server" => server = args.next().ok_or("--server requires URL")?,
             "--view" => {
                 let v = args.next().ok_or("--view requires name")?;
@@ -1191,6 +1123,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => return Err(format!("Unknown option: {arg}").into()),
         }
     }
+    if let Some(query) = inspect_query {
+        let mut index = search_ui::SearchUi::load();
+        if let Ok(path) = std::env::var("OSRS_SEARCH_CATALOGUE") {
+            index.catalogue(&serde_json::from_slice::<Value>(&fs::read(path)?)?);
+        }
+        index.filter = search::parse(&query).map_err(io::Error::other)?;
+        index.rank();
+        let results:Vec<_>=index.hits.iter().take(8).map(|h|{let e=&index.entries[h.entry];serde_json::json!({"name":e.name,"key":e.key,"scope":e.scope.name(),"score":h.score,"reason":h.reason,"matched":e.targets[h.target].label,"indices":h.indices})}).collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(
+                &serde_json::json!({"filter":index.filter,"results":results})
+            )?
+        );
+        return Ok(());
+    }
     server = server.trim_end_matches('/').to_string();
     let (tx, mut rx) = mpsc::unbounded_channel();
     let commands = net::connect(server.clone(), tx);
@@ -1211,7 +1159,47 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         while let Ok(message) = rx.try_recv() {
             match message {
+                net::Message::Catalogue(entries) => {
+                    app.search.entries.retain(|e| {
+                        e.scope != search::Scope::Items && e.scope != search::Scope::Docs
+                    });
+                    app.search.entries.extend(entries);
+                    if app.palette.is_some() {
+                        app.search.rank();
+                    }
+                }
+                net::Message::Search(query, kind, value) => app.search_response(query, kind, value),
                 net::Message::Data(key, value) => {
+                    if key == "search/catalogue" {
+                        app.search.catalogue(&value);
+                        if app.palette.is_some() {
+                            app.search_changed();
+                        }
+                    }
+                    if key == "jobs" {
+                        app.search
+                            .entries
+                            .retain(|e| e.scope != search::Scope::Jobs);
+                        if let Some(rows) = value["data"].as_array() {
+                            for row in rows {
+                                let id = row["id"].as_str().unwrap_or("");
+                                app.search.entries.push(search::Entry::new(
+                                    format!("job:{id}"),
+                                    format!(
+                                        "{} {} {}",
+                                        row["kind"].as_str().unwrap_or("job"),
+                                        id,
+                                        row["status"].as_str().unwrap_or("")
+                                    ),
+                                    search::Scope::Jobs,
+                                    row.clone(),
+                                ));
+                            }
+                        }
+                        if app.palette.is_some() {
+                            app.search.rank();
+                        }
+                    }
                     if key == "chat" && value["id"].as_str() != Some(app.chat.id.as_str()) {
                         continue;
                     }

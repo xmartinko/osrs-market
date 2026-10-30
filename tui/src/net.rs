@@ -11,8 +11,11 @@ pub enum Message {
     Event(String, Value),
     Stream(String),
     ChatStarted(Value),
+    Search(String, String, Value),
+    Catalogue(Vec<super::search::Entry>),
 }
 pub enum Command {
+    Search(String, std::collections::HashMap<u64, f64>),
     Terminal(String, String, Value),
     DeleteAlert(u64),
     TerminalWindows(Vec<String>),
@@ -45,7 +48,33 @@ async fn send_data(
 ) -> bool {
     match fetch(client, server, route).await {
         Ok(value) => {
-            let _ = tx.send(Message::Data(key.into(), value));
+            if key == "search/catalogue" {
+                let path = super::layout_path().with_file_name("search-cache.json");
+                if let Some(parent) = path.parent() {
+                    let _ = tokio::fs::create_dir_all(parent).await;
+                }
+                if let Ok(bytes) = serde_json::to_vec(&value) {
+                    if tokio::fs::write(path.with_extension("tmp"), bytes)
+                        .await
+                        .is_ok()
+                    {
+                        let _ = tokio::fs::rename(path.with_extension("tmp"), &path).await;
+                    }
+                }
+            }
+            if key == "search/catalogue" {
+                if let Ok(entries) = tokio::task::spawn_blocking(move || {
+                    let mut index = super::search_ui::SearchUi::default();
+                    index.catalogue(&value);
+                    index.entries
+                })
+                .await
+                {
+                    let _ = tx.send(Message::Catalogue(entries));
+                }
+            } else {
+                let _ = tx.send(Message::Data(key.into(), value));
+            }
             true
         }
         Err(error) => {
@@ -69,6 +98,7 @@ pub fn connect(
         loop {
             let routes = [
                 "health",
+                "search/catalogue",
                 "terminal/alerts",
                 "usage",
                 "chats",
@@ -99,10 +129,30 @@ pub fn connect(
     tokio::spawn(async move {
         let mut terminal_tasks =
             std::collections::HashMap::<String, (Value, tokio::task::JoinHandle<()>)>::new();
+        let mut search_task = None::<tokio::task::JoinHandle<()>>;
         let mut watch = None::<tokio::task::JoinHandle<()>>;
         let mut chat_watch = None::<tokio::task::JoinHandle<()>>;
         while let Some(command) = rx.recv().await {
             match command {
+                Command::Search(query, fuzzy) => {
+                    if let Some(task) = search_task.take() {
+                        task.abort();
+                    }
+                    let (client, server, tx) = (client.clone(), server.clone(), tx.clone());
+                    search_task = Some(tokio::spawn(async move {
+                        tokio::time::sleep(Duration::from_millis(250)).await;
+                        let result=async {
+                            let parsed:Value=client.post(format!("{server}/api/search/parse")).json(&serde_json::json!({"query":query})).send().await?.error_for_status()?.json().await?;
+                            let _=tx.send(Message::Search(query.clone(),"parse".into(),parsed.clone()));
+                            let value:Value=client.post(format!("{server}/api/search")).json(&serde_json::json!({"query":query,"intent":parsed["filter"],"fuzzy":fuzzy})).send().await?.error_for_status()?.json().await?;
+                            let _=tx.send(Message::Search(query.clone(),"results".into(),value));
+                            Ok::<(),reqwest::Error>(())
+                        }.await;
+                        if result.is_err() {
+                            let _ = tx.send(Message::Search(query, "error".into(), Value::Null));
+                        }
+                    }));
+                }
                 Command::TerminalWindows(keys) => {
                     terminal_tasks.retain(|key, (_, task)| {
                         let keep = keys.contains(key)
