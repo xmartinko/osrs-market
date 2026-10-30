@@ -72,6 +72,7 @@ def create_app(service=None, runner=None):
     app.get("/api/health")(service.health)
     app.get("/api/items")(service.items)
     app.get("/api/prices/latest")(service.latest)
+    app.get("/api/prices/movers")(service.movers)
 
     @app.get("/api/prices/{item_id}/history")
     def history(

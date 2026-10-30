@@ -13,11 +13,11 @@ from typing import Literal
 
 import pyarrow as pa
 import pyarrow.parquet as pq
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..alchemy import registration
 from ..battery import sealed_read
-from ..data import FIELDS, SCHEMA, manifest
+from ..data import FIELDS, manifest
 from ..fixture import write_fixture
 from .service import ML
 
@@ -26,9 +26,22 @@ class Params(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     dataset: Literal["synthetic", "development"] = "synthetic"
     horizon_hours: Literal[1, 4, 24] = 1
-    track: Literal["price_only", "full_feature"] = "price_only"
-    preset: Literal["conservative", "moderate", "optimistic"] = "conservative"
+    track: Literal["price_only", "full_feature", "frozen_daily"] = "price_only"
+    preset: Literal["conservative", "moderate", "optimistic", "all"] = "conservative"
     cash_gp: int = Field(default=10_000_000, ge=1000, le=100_000_000)
+
+    @model_validator(mode="after")
+    def matching_resolution(self):
+        if self.dataset == "development":
+            if self.horizon_hours != 24 or self.track != "frozen_daily" or self.preset != "all":
+                raise ValueError(
+                    "Daily development requires horizon_hours=24, track=frozen_daily, preset=all"
+                )
+        elif self.track == "frozen_daily" or self.preset == "all":
+            raise ValueError(
+                "Synthetic jobs require a price_only/full_feature track and one execution preset"
+            )
+        return self
 
 
 class JobRequest(BaseModel):
@@ -163,7 +176,13 @@ def prepare(root, request, output):
             else pa.nulls(len(frame), type=pa.int64())
             for f in FIELDS
         ]
-        pq.write_table(pa.Table.from_arrays(arrays, schema=SCHEMA), snapshot)
+        # Retain availability, unknown-interval flags and all provenance columns.
+        for name, array in zip(FIELDS, arrays, strict=True):
+            if name in table.column_names:
+                table = table.set_column(table.column_names.index(name), name, array)
+            else:
+                table = table.append_column(name, array)
+        pq.write_table(table, snapshot)
         manifest(
             snapshot,
             source="sealed_development",
@@ -171,8 +190,27 @@ def prepare(root, request, output):
             holdout_read=False,
             holdout_start=cfg["holdout_start"],
         )
-    # All kinds deliberately use the same audited comparison harness. Train saves CatBoost
-    # artifacts; backtest/eval/benchmark retain its baselines and execution metrics too.
+    # Each dataset uses its existing audited CLI, without a holdout capability.
+    if request.params.dataset == "development":
+        config = json.loads((ML / "experiments/daily-v1.json").read_text())
+        # Input is already sealed to development. Reserve no further holdout; use two
+        # 14-day folds inside the frozen 84-day development window. No research code changes.
+        config.update(holdout_days=0, folds=2, fold_days=14, cash_gp=request.params.cash_gp)
+        config_path = output / "daily.json"
+        config_path.write_text(json.dumps(config))
+        return [
+            "uv",
+            "run",
+            "--frozen",
+            "osrs-ml",
+            "research",
+            "--panel",
+            str(snapshot),
+            "--output",
+            str(output / "run"),
+            "--config",
+            str(config_path),
+        ]
     return [
         "uv",
         "run",
@@ -209,6 +247,8 @@ class Runner:
 
     async def start(self):
         for job in self.store.list():
+            if job["status"] == "succeeded":
+                self.store.update(job["id"], progress=1)
             if job["status"] == "running":
                 self.store.update(
                     job["id"],
@@ -292,7 +332,8 @@ class Runner:
                         {"artifact": str(path.relative_to(output)), "values": values},
                     )
                     seen.add(path)
-                    self.store.update(job_id, progress=min(0.95, len(seen) / 16))
+                    if self.store.get(job_id)["status"] not in TERMINAL:
+                        self.store.update(job_id, progress=min(0.95, len(seen) / 16))
                 except (ValueError, OSError):
                     continue
             job = self.store.get(job_id)

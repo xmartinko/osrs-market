@@ -1,4 +1,6 @@
+mod charts;
 mod net;
+mod views;
 mod window;
 
 use crossterm::{
@@ -23,7 +25,35 @@ use std::{
 use tokio::sync::mpsc;
 use window::{Bounds, Hit, Window};
 
-const VIEWS: &[&str] = &["Market table", "Alchemy gaps"];
+const VIEWS: &[&str] = &[
+    "Market table",
+    "Alchemy gaps",
+    "Candlestick chart",
+    "Metric series",
+    "Movers screener",
+    "Jobs",
+    "Model results",
+    "Collector health",
+    "Log console",
+    "Research battery",
+    "Participation",
+    "Start benchmark",
+    "Start eval",
+    "Start train",
+    "Start backtest",
+    "Dataset: synthetic",
+    "Dataset: development",
+    "Track: price_only",
+    "Track: full_feature",
+    "Track: frozen_daily",
+    "Preset: all",
+    "Preset: conservative",
+    "Preset: moderate",
+    "Preset: optimistic",
+    "Horizon: 1",
+    "Horizon: 4",
+    "Horizon: 24",
+];
 const BG: Color = Color::Rgb(11, 18, 28);
 const FG: Color = Color::Rgb(202, 216, 224);
 const ACCENT: Color = Color::Rgb(89, 210, 185);
@@ -54,6 +84,18 @@ struct App {
     width: u16,
     height: u16,
     server: String,
+    commands: mpsc::UnboundedSender<net::Command>,
+    item: u64,
+    tf: String,
+    hover: Option<(u16, u16)>,
+    selected_job: String,
+    job_events: HashMap<String, Vec<Value>>,
+    stream_state: String,
+    metric: String,
+    dataset: String,
+    track: String,
+    preset: String,
+    horizon: u64,
 }
 fn layout_path() -> PathBuf {
     PathBuf::from(std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| {
@@ -65,7 +107,11 @@ fn layout_path() -> PathBuf {
     .join("osrs-term/layout.json")
 }
 impl App {
-    fn new(server: String, view: Option<String>) -> Self {
+    fn new(
+        server: String,
+        view: Option<String>,
+        commands: mpsc::UnboundedSender<net::Command>,
+    ) -> Self {
         let windows = if let Some(view) = view {
             vec![Window {
                 view,
@@ -113,7 +159,11 @@ impl App {
                     ]
                 })
         };
-        Self {
+        let state: Value = fs::read(layout_path().with_file_name("state.json"))
+            .ok()
+            .and_then(|v| serde_json::from_slice(&v).ok())
+            .unwrap_or(Value::Null);
+        let app = Self {
             windows,
             data: HashMap::new(),
             received: HashMap::new(),
@@ -126,7 +176,30 @@ impl App {
             width: 0,
             height: 0,
             server,
+            commands,
+            item: state["item"].as_u64().unwrap_or(855),
+            tf: state["tf"]
+                .as_str()
+                .filter(|s| ["5m", "1h", "1d"].contains(s))
+                .unwrap_or("5m")
+                .into(),
+            hover: None,
+            selected_job: state["selected_job"].as_str().unwrap_or("").into(),
+            job_events: HashMap::new(),
+            stream_state: "detached".into(),
+            metric: state["metric"].as_str().unwrap_or("net_gp_per_hour").into(),
+            dataset: state["dataset"].as_str().unwrap_or("synthetic").into(),
+            track: state["track"].as_str().unwrap_or("price_only").into(),
+            preset: state["preset"].as_str().unwrap_or("conservative").into(),
+            horizon: state["horizon"].as_u64().unwrap_or(1),
+        };
+        app.history();
+        if !app.selected_job.is_empty() {
+            let _ = app
+                .commands
+                .send(net::Command::Watch(app.selected_job.clone()));
         }
+        app
     }
     fn save(&mut self) {
         let path = layout_path();
@@ -136,7 +209,16 @@ impl App {
                 path.with_extension("tmp"),
                 serde_json::to_vec_pretty(&self.windows)?,
             )?;
-            fs::rename(path.with_extension("tmp"), path)
+            fs::rename(path.with_extension("tmp"), &path)?;
+            let state = serde_json::json!({"item":self.item,"tf":self.tf,"selected_job":self.selected_job,"metric":self.metric,"dataset":self.dataset,"track":self.track,"preset":self.preset,"horizon":self.horizon});
+            fs::write(
+                path.with_file_name("state.tmp"),
+                serde_json::to_vec(&state)?,
+            )?;
+            fs::rename(
+                path.with_file_name("state.tmp"),
+                path.with_file_name("state.json"),
+            )
         })();
         if let Err(e) = result {
             self.errors.push(format!("Layout: {e}"));
@@ -155,8 +237,8 @@ impl App {
             view,
             rect: window::clamp(
                 Bounds {
-                    x: 4 + n * 2,
-                    y: 2 + n,
+                    x: 4u16.saturating_add(n.saturating_mul(2)),
+                    y: 2u16.saturating_add(n),
                     w: 130,
                     h: 32,
                 },
@@ -168,6 +250,66 @@ impl App {
             sort: 0,
         });
         self.save();
+    }
+    fn history(&self) {
+        let _ = self
+            .commands
+            .send(net::Command::History(self.item, self.tf.clone()));
+    }
+    fn choose_job(&mut self, id: String) {
+        if id != self.selected_job {
+            self.selected_job = id.clone();
+            self.stream_state = "attaching / replaying".into();
+            let _ = self.commands.send(net::Command::Watch(id));
+            self.save();
+        }
+    }
+    fn action(&mut self, action: String) {
+        if let Some(kind) = action.strip_prefix("Start ") {
+            let params = serde_json::json!({"dataset":self.dataset,"track":self.track,"preset":self.preset,"horizon_hours":self.horizon});
+            self.errors.push(format!("Starting {kind}: {params}"));
+            let _ = self.commands.send(net::Command::Start(kind.into(), params));
+            if !self.windows.last().is_some_and(|w| w.view == "Jobs") {
+                self.add("Jobs".into());
+            }
+        } else if let Some(value) = action.strip_prefix("Dataset: ") {
+            self.dataset = value.into();
+            if value == "development" {
+                self.horizon = 24;
+                self.track = "frozen_daily".into();
+                self.preset = "all".into();
+            } else {
+                self.horizon = 1;
+                self.track = "price_only".into();
+                self.preset = "conservative".into();
+            }
+        } else if let Some(value) = action.strip_prefix("Track: ") {
+            self.track = value.into();
+        } else if let Some(value) = action.strip_prefix("Preset: ") {
+            self.preset = value.into();
+        } else if let Some(value) = action.strip_prefix("Horizon: ") {
+            self.horizon = value.parse().unwrap_or(1);
+        } else {
+            self.add(action);
+        }
+        self.save();
+    }
+    fn market_rows(&self, w: &Window) -> Vec<&Value> {
+        let mut rows = self.rows("prices/latest");
+        rows.retain(|r| {
+            r["name"]
+                .as_str()
+                .unwrap_or("")
+                .to_lowercase()
+                .contains(&w.filter.to_lowercase())
+        });
+        if w.sort == 1 {
+            rows.sort_by(|a, b| b["margin_gp"].as_i64().cmp(&a["margin_gp"].as_i64()));
+        }
+        if w.sort == 2 {
+            rows.sort_by(|a, b| b["buy_price"].as_i64().cmp(&a["buy_price"].as_i64()));
+        }
+        rows
     }
     fn rows(&self, key: &str) -> Vec<&Value> {
         self.data
@@ -229,6 +371,15 @@ impl App {
             match w.view.as_str() {
                 "Market table" => self.market(f, inner, w),
                 "Alchemy gaps" => self.alchemy(f, inner, w),
+                "Candlestick chart" => self.candles(f, inner, w),
+                "Metric series" => charts::line(f, inner, &self.metric_points(), &self.metric),
+                "Jobs" => self.jobs(f, inner, w),
+                "Movers screener" => self.movers(f, inner, w),
+                "Model results" => self.models(f, inner, w),
+                "Collector health" => self.collector(f, inner, w),
+                "Log console" => self.console(f, inner, w),
+                "Research battery" => self.research_table(f, inner, w, true),
+                "Participation" => self.research_table(f, inner, w, false),
                 _ => f.render_widget(Paragraph::new("Unknown view"), inner),
             }
         }
@@ -259,7 +410,7 @@ impl App {
         );
         if let Some(query) = &self.palette {
             let width = 70.min(area.width);
-            let height = 16.min(area.height);
+            let height = 30.min(area.height);
             let rect = Rect::new(
                 area.width.saturating_sub(width) / 2,
                 area.height.saturating_sub(height) / 2,
@@ -268,8 +419,21 @@ impl App {
             );
             f.render_widget(Clear, rect);
             let matches: Vec<_> = VIEWS.iter().filter(|v| window::fuzzy(query, v)).collect();
-            let mut lines = vec![Line::from(format!(" > {query}_")), Line::from("")];
-            for (i, name) in matches.iter().enumerate() {
+            let mut lines = vec![
+                Line::from(format!(" > {query}_")),
+                Line::from(format!(
+                    " dataset:{} track:{} {}h",
+                    self.dataset, self.track, self.horizon
+                )),
+                Line::from(" Or type: item 4151 / metric net_gp"),
+                Line::from(""),
+            ];
+            for (i, name) in matches
+                .iter()
+                .enumerate()
+                .skip(self.palette_index.saturating_sub(19))
+                .take(22)
+            {
                 lines.push(Line::styled(
                     format!(
                         " {} {name}",
@@ -303,20 +467,7 @@ impl App {
             )),
             Rect::new(area.x, area.y, area.width, 1),
         );
-        let mut rows = self.rows("prices/latest");
-        rows.retain(|r| {
-            r["name"]
-                .as_str()
-                .unwrap_or("")
-                .to_lowercase()
-                .contains(&w.filter.to_lowercase())
-        });
-        if w.sort == 1 {
-            rows.sort_by(|a, b| b["margin_gp"].as_i64().cmp(&a["margin_gp"].as_i64()));
-        }
-        if w.sort == 2 {
-            rows.sort_by(|a, b| b["buy_price"].as_i64().cmp(&a["buy_price"].as_i64()));
-        }
+        let rows = self.market_rows(w);
         let rows = rows.into_iter().skip(w.scroll).map(|r| {
             Row::new([
                 val(&r["item_id"]),
@@ -350,7 +501,12 @@ impl App {
         .row_highlight_style(Style::default().bg(Color::DarkGray));
         f.render_widget(
             table,
-            Rect::new(area.x, area.y + 1, area.width, area.height - 1),
+            Rect::new(
+                area.x,
+                area.y + 1,
+                area.width,
+                area.height.saturating_sub(2),
+            ),
         );
         if area.height > 4 {
             f.render_widget(
@@ -421,7 +577,12 @@ impl App {
                 ])
                 .style(Style::default().fg(ACCENT)),
             ),
-            Rect::new(area.x, area.y + 2, area.width, area.height - 2),
+            Rect::new(
+                area.x,
+                area.y + 2,
+                area.width,
+                area.height.saturating_sub(4),
+            ),
         );
         f.render_widget(
             Paragraph::new(
@@ -450,6 +611,28 @@ impl App {
                 }
                 KeyCode::Up => self.palette_index = self.palette_index.saturating_sub(1),
                 KeyCode::Enter => {
+                    if let Some(value) = query
+                        .strip_prefix("item ")
+                        .and_then(|s| s.trim().parse::<u64>().ok())
+                        .filter(|i| *i > 0)
+                    {
+                        self.item = value;
+                        self.data.remove("history");
+                        self.history();
+                        self.palette = None;
+                        self.add("Candlestick chart".into());
+                        return false;
+                    }
+                    if let Some(value) = query
+                        .strip_prefix("metric ")
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                    {
+                        self.metric = value.into();
+                        self.palette = None;
+                        self.add("Metric series".into());
+                        return false;
+                    }
                     let selected = VIEWS
                         .iter()
                         .filter(|v| window::fuzzy(query, v))
@@ -457,7 +640,7 @@ impl App {
                         .map(|s| s.to_string());
                     self.palette = None;
                     if let Some(v) = selected {
-                        self.add(v)
+                        self.action(v)
                     }
                 }
                 _ => {}
@@ -491,6 +674,67 @@ impl App {
             self.palette = Some(String::new());
             self.palette_index = 0;
             return false;
+        }
+        let focused = self.windows.last().map(|w| w.view.as_str()).unwrap_or("");
+        if focused == "Candlestick chart" {
+            if let KeyCode::Char(c @ ('1' | '2' | '3')) = code {
+                self.tf = match c {
+                    '1' => "5m",
+                    '2' => "1h",
+                    _ => "1d",
+                }
+                .into();
+                self.data.remove("history");
+                if let Some(w) = self.windows.last_mut() {
+                    w.scroll = 0;
+                }
+                self.history();
+                self.save();
+                return false;
+            }
+        }
+        if focused == "Market table" && code == KeyCode::Enter {
+            if let Some(w) = self.windows.last() {
+                if let Some(id) = self
+                    .market_rows(w)
+                    .get(w.scroll)
+                    .and_then(|r| r["item_id"].as_u64())
+                {
+                    self.item = id;
+                    self.data.remove("history");
+                    self.history();
+                    self.add("Candlestick chart".into());
+                }
+            }
+            return false;
+        }
+        if focused == "Jobs" {
+            if code == KeyCode::Char('c') && !self.selected_job.is_empty() {
+                let _ = self
+                    .commands
+                    .send(net::Command::Cancel(self.selected_job.clone()));
+                return false;
+            }
+            if matches!(code, KeyCode::Char('j' | 'k')) {
+                let rows = self.rows("jobs");
+                let i = rows
+                    .iter()
+                    .position(|r| r["id"] == self.selected_job)
+                    .unwrap_or(0);
+                let next = if code == KeyCode::Char('j') {
+                    (i + 1).min(rows.len().saturating_sub(1))
+                } else {
+                    i.saturating_sub(1)
+                };
+                let id = rows
+                    .get(next)
+                    .and_then(|r| r["id"].as_str())
+                    .map(str::to_string);
+                if let Some(id) = id {
+                    self.choose_job(id);
+                }
+                return false;
+            }
         }
         match code {
             KeyCode::Char('q') | KeyCode::Esc => return true,
@@ -540,6 +784,7 @@ impl App {
         false
     }
     fn mouse(&mut self, m: event::MouseEvent) {
+        self.hover = Some((m.column, m.row));
         if self.palette.is_some() {
             return;
         }
@@ -552,6 +797,25 @@ impl App {
                     if action != Some(Hit::Close) {
                         self.windows.push(w);
                         let rect = self.windows.last().unwrap().rect;
+                        if action == Some(Hit::Body)
+                            && self.windows.last().is_some_and(|w| w.view == "Jobs")
+                        {
+                            let relative = m.row.saturating_sub(rect.y);
+                            if (3..9).contains(&relative) {
+                                let rows = self.rows("jobs");
+                                let selected = rows
+                                    .iter()
+                                    .position(|r| r["id"] == self.selected_job)
+                                    .unwrap_or(0);
+                                let id = rows
+                                    .get(selected.saturating_sub(4) + (relative - 3) as usize)
+                                    .and_then(|r| r["id"].as_str())
+                                    .map(str::to_string);
+                                if let Some(id) = id {
+                                    self.choose_job(id);
+                                }
+                            }
+                        }
                         if matches!(action, Some(Hit::Title | Hit::Resize)) {
                             self.drag = Some(Drag {
                                 rect,
@@ -616,6 +880,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     match v.as_str() {
                         "market" => "Market table",
                         "alchemy" => "Alchemy gaps",
+                        "candles" => "Candlestick chart",
+                        "jobs" => "Jobs",
+                        "movers" => "Movers screener",
+                        "models" => "Model results",
+                        "collector" => "Collector health",
+                        "metrics" => "Metric series",
                         _ => return Err("unknown view".into()),
                     }
                     .into(),
@@ -623,7 +893,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             "--help" | "-h" => {
                 println!(
-                    "osrs-term [--server URL] [--view market|alchemy]\nServer URL also reads OSRS_TERM_SERVER. / command palette; q quit."
+                    "osrs-term [--server URL] [--view market|alchemy|candles|jobs|movers|models|collector|metrics]\nServer URL also reads OSRS_TERM_SERVER. / command palette; q quit."
                 );
                 return Ok(());
             }
@@ -632,8 +902,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     server = server.trim_end_matches('/').to_string();
     let (tx, mut rx) = mpsc::unbounded_channel();
-    net::connect(server.clone(), tx);
-    let mut app = App::new(server, view);
+    let commands = net::connect(server.clone(), tx);
+    let mut app = App::new(server, view, commands);
     enable_raw_mode()?;
     let _screen = Screen;
     execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
@@ -652,12 +922,53 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if key == "health" {
                         app.connected = true;
                     }
+                    if key == "jobs"
+                        && (app.selected_job.is_empty()
+                            || !value["data"].as_array().is_some_and(|rows| {
+                                rows.iter().any(|r| r["id"] == app.selected_job)
+                            }))
+                    {
+                        if let Some(id) = value["data"][0]["id"].as_str() {
+                            app.choose_job(id.into());
+                        }
+                    }
                     app.received.insert(key.clone(), Instant::now());
                     app.data.insert(key, value);
+                }
+                net::Message::Started(job) => {
+                    if let Some(id) = job["id"].as_str() {
+                        app.choose_job(id.into());
+                    }
+                    app.errors
+                        .push(format!("Queued {} job {}", job["kind"], job["id"]));
+                }
+                net::Message::Stream(state) => app.stream_state = state,
+                net::Message::Event(id, event) => {
+                    let events = app.job_events.entry(id.clone()).or_default();
+                    if !events.iter().any(|e| e["seq"] == event["seq"]) {
+                        if event["type"] == "status" {
+                            if let Some(rows) = app
+                                .data
+                                .get_mut("jobs")
+                                .and_then(|v| v["data"].as_array_mut())
+                            {
+                                for row in rows {
+                                    if row["id"] == id {
+                                        row["status"] = event["data"]["status"].clone();
+                                    }
+                                }
+                            }
+                        }
+                        events.push(event);
+                    }
                 }
                 net::Message::Error(key, error) => {
                     if key == "health" {
                         app.connected = false;
+                    }
+                    if let Some(value) = app.data.get_mut(&key) {
+                        value["stale"] = true.into();
+                        value["error"] = error.clone().into();
                     }
                     app.errors.push(format!("{key}: {error}"));
                     if app.errors.len() > 500 {

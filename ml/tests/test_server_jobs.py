@@ -134,7 +134,49 @@ def test_development_predicate_before_cli(tmp_path):
             for t, marker in [(cutoff - 1, 10), (cutoff, 999), (cutoff + 1, 999)]
         ]
     ).to_parquet(path)
-    prepare(tmp_path, JobRequest(kind="eval", params={"dataset": "development"}), tmp_path / "safe")
+    prepare(
+        tmp_path,
+        JobRequest(
+            kind="eval",
+            params={
+                "dataset": "development",
+                "horizon_hours": 24,
+                "track": "frozen_daily",
+                "preset": "all",
+            },
+        ),
+        tmp_path / "safe",
+    )
     result = pd.read_parquet(tmp_path / "safe/input.parquet")
     assert result.avg_high_price.tolist() == [10]
     assert result.timestamp.max() + 86400 < cutoff
+
+
+def test_late_artifact_keeps_completed_progress_and_replays_after_cursor(tmp_path):
+    import json
+
+    def artifact(root, request, output):
+        metrics = output / "run/x/metrics.json"
+        code = f"import pathlib; p=pathlib.Path({str(metrics)!r}); p.parent.mkdir(parents=True); p.write_text('{json.dumps({'net_gp': 12})}'); print(\"artifact ready\")"
+        return [sys.executable, "-u", "-c", code]
+
+    runner = make_runner(tmp_path)
+    runner.command_factory = artifact
+    with TestClient(create_app(fixture_service(tmp_path), runner)) as client:
+        job_id = client.post("/api/jobs", json={"kind": "benchmark"}).json()["id"]
+        with client.websocket_connect(f"/api/jobs/{job_id}/stream") as ws:
+            while True:
+                try:
+                    ws.receive_json()
+                except Exception as exc:
+                    from starlette.websockets import WebSocketDisconnect
+
+                    assert isinstance(exc, WebSocketDisconnect)
+                    break
+        job = client.get("/api/jobs/" + job_id).json()
+        assert job["status"] == "succeeded" and job["progress"] == 1
+        assert job["metrics_history"][0]["data"]["values"]["net_gp"] == 12
+        events = runner.store.events(job_id)
+        cursor = events[1]["seq"]
+        with client.websocket_connect(f"/api/jobs/{job_id}/stream?after={cursor}") as ws:
+            assert ws.receive_json()["seq"] > cursor

@@ -1,3 +1,4 @@
+use futures_util::StreamExt;
 use serde_json::Value;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -6,24 +7,120 @@ use tokio::sync::mpsc;
 pub enum Message {
     Data(String, Value),
     Error(String, String),
+    Started(Value),
+    Event(String, Value),
+    Stream(String),
 }
-
-pub fn connect(server: String, tx: mpsc::UnboundedSender<Message>) {
+pub enum Command {
+    History(u64, String),
+    Start(String, Value),
+    Cancel(String),
+    Watch(String),
+}
+async fn fetch(
+    client: &reqwest::Client,
+    server: &str,
+    route: &str,
+) -> Result<Value, reqwest::Error> {
+    client
+        .get(format!("{server}/api/{route}"))
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await
+}
+async fn send_data(
+    client: &reqwest::Client,
+    server: &str,
+    route: &str,
+    key: &str,
+    tx: &mpsc::UnboundedSender<Message>,
+) -> bool {
+    match fetch(client, server, route).await {
+        Ok(value) => {
+            let _ = tx.send(Message::Data(key.into(), value));
+            true
+        }
+        Err(error) => {
+            let _ = tx.send(Message::Error(key.into(), error.to_string()));
+            false
+        }
+    }
+}
+pub fn connect(
+    server: String,
+    tx: mpsc::UnboundedSender<Message>,
+) -> mpsc::UnboundedSender<Command> {
+    let (commands, mut rx) = mpsc::unbounded_channel();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(16))
+        .build()
+        .expect("HTTP client");
+    let (poll_client, poll_server, poll_tx) = (client.clone(), server.clone(), tx.clone());
     tokio::spawn(async move {
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(16))
-            .build()
-            .expect("HTTP client");
         let mut backoff = 1;
         loop {
-            let calls = ["health", "prices/latest", "alch/gaps"]
+            let routes = [
+                "health",
+                "prices/latest",
+                "alch/gaps",
+                "prices/movers",
+                "jobs",
+                "models/runs",
+                "collector/health",
+                "research/battery",
+                "research/participation",
+            ];
+            let calls = routes
                 .into_iter()
-                .map(|route| {
-                    let (client, tx, server) = (client.clone(), tx.clone(), server.clone());
-                    async move {
+                .map(|route| send_data(&poll_client, &poll_server, route, route, &poll_tx));
+            let results = futures_util::future::join_all(calls).await;
+            if results[0] {
+                backoff = 1;
+            } else {
+                backoff = (backoff * 2).min(30);
+            }
+            if poll_tx.is_closed() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_secs(if backoff == 1 { 3 } else { backoff })).await;
+        }
+    });
+    tokio::spawn(async move {
+        let mut history = None::<tokio::task::JoinHandle<()>>;
+        let mut watch = None::<tokio::task::JoinHandle<()>>;
+        while let Some(command) = rx.recv().await {
+            match command {
+                Command::History(item, tf) => {
+                    if let Some(task) = history.take() {
+                        task.abort();
+                    }
+                    let (client, server, tx) = (client.clone(), server.clone(), tx.clone());
+                    history = Some(tokio::spawn(async move {
+                        loop {
+                            send_data(
+                                &client,
+                                &server,
+                                &format!("prices/{item}/history?tf={tf}&limit=120"),
+                                "history",
+                                &tx,
+                            )
+                            .await;
+                            if tx.is_closed() {
+                                break;
+                            }
+                            tokio::time::sleep(Duration::from_secs(15)).await;
+                        }
+                    }));
+                }
+                Command::Start(kind, params) => {
+                    let (client, server, tx) = (client.clone(), server.clone(), tx.clone());
+                    tokio::spawn(async move {
                         let result = async {
                             client
-                                .get(format!("{server}/api/{route}"))
+                                .post(format!("{server}/api/jobs"))
+                                .json(&serde_json::json!({"kind":kind,"params":params}))
                                 .send()
                                 .await?
                                 .error_for_status()?
@@ -33,26 +130,119 @@ pub fn connect(server: String, tx: mpsc::UnboundedSender<Message>) {
                         .await;
                         match result {
                             Ok(value) => {
-                                let _ = tx.send(Message::Data(route.into(), value));
-                                true
+                                let _ = tx.send(Message::Started(value));
                             }
-                            Err(error) => {
-                                let _ = tx.send(Message::Error(route.into(), error.to_string()));
-                                false
+                            Err(e) => {
+                                let _ = tx.send(Message::Error("start job".into(), e.to_string()));
                             }
                         }
+                        send_data(&client, &server, "jobs", "jobs", &tx).await;
+                    });
+                }
+                Command::Cancel(id) => {
+                    let (client, server, tx) = (client.clone(), server.clone(), tx.clone());
+                    tokio::spawn(async move {
+                        if let Err(e) = async {
+                            client
+                                .post(format!("{server}/api/jobs/{id}/cancel"))
+                                .send()
+                                .await?
+                                .error_for_status()
+                        }
+                        .await
+                        {
+                            let _ = tx.send(Message::Error("cancel job".into(), e.to_string()));
+                        }
+                        send_data(&client, &server, "jobs", "jobs", &tx).await;
+                    });
+                }
+                Command::Watch(id) => {
+                    if let Some(task) = watch.take() {
+                        task.abort();
                     }
-                });
-            let results = futures_util::future::join_all(calls).await;
-            if results.iter().all(|r| *r) {
-                backoff = 1;
-            } else {
-                backoff = (backoff * 2).min(30);
+                    let (client, server, tx) = (client.clone(), server.clone(), tx.clone());
+                    watch = Some(tokio::spawn(async move {
+                        let mut after = 0i64;
+                        let mut backoff = 1;
+                        loop {
+                            send_data(
+                                &client,
+                                &server,
+                                &format!("jobs/{id}"),
+                                &format!("jobs/{id}"),
+                                &tx,
+                            )
+                            .await;
+                            let base = server
+                                .replacen("https://", "wss://", 1)
+                                .replacen("http://", "ws://", 1);
+                            let url = format!("{base}/api/jobs/{id}/stream?after={after}");
+                            let mut terminal = false;
+                            match tokio_tungstenite::connect_async(url).await {
+                                Ok((mut socket, _)) => {
+                                    backoff = 1;
+                                    let _ = tx.send(Message::Stream("attached".into()));
+                                    while let Some(message) = socket.next().await {
+                                        match message {
+                                            Ok(tokio_tungstenite::tungstenite::Message::Text(
+                                                text,
+                                            )) => {
+                                                if let Ok(event) =
+                                                    serde_json::from_str::<Value>(&text)
+                                                {
+                                                    after = after
+                                                        .max(event["seq"].as_i64().unwrap_or(0));
+                                                    if event["type"] == "status" {
+                                                        terminal = matches!(
+                                                            event["data"]["status"].as_str(),
+                                                            Some(
+                                                                "succeeded"
+                                                                    | "failed"
+                                                                    | "cancelled"
+                                                            )
+                                                        );
+                                                    }
+                                                    let _ =
+                                                        tx.send(Message::Event(id.clone(), event));
+                                                }
+                                            }
+                                            Ok(tokio_tungstenite::tungstenite::Message::Close(
+                                                _,
+                                            ))
+                                            | Err(_) => break,
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    let _ =
+                                        tx.send(Message::Error("job stream".into(), e.to_string()));
+                                }
+                            }
+                            if terminal {
+                                let _ =
+                                    tx.send(Message::Stream("complete / replay available".into()));
+                                break;
+                            }
+                            let _ = tx.send(Message::Stream(format!(
+                                "reconnecting in {backoff}s (cursor {after})"
+                            )));
+                            tokio::time::sleep(Duration::from_secs(backoff)).await;
+                            backoff = (backoff * 2).min(30);
+                            if tx.is_closed() {
+                                break;
+                            }
+                        }
+                    }));
+                }
             }
-            if tx.is_closed() {
-                break;
-            }
-            tokio::time::sleep(Duration::from_secs(if backoff == 1 { 5 } else { backoff })).await;
+        }
+        if let Some(task) = history {
+            task.abort();
+        }
+        if let Some(task) = watch {
+            task.abort();
         }
     });
+    commands
 }

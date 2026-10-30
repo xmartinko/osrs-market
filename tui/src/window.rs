@@ -147,3 +147,21 @@ mod tests {
         assert!(!fuzzy("zz", "Market table"));
     }
 }
+
+pub fn chart_index(x: u16, left: u16, width: u16, count: usize) -> usize {
+    if width == 0 || count == 0 {
+        return 0;
+    }
+    ((x.saturating_sub(left) as usize * count) / width as usize).min(count - 1)
+}
+#[cfg(test)]
+mod chart_tests {
+    use super::*;
+    #[test]
+    fn hover_clamps_to_bucket() {
+        assert_eq!(chart_index(0, 10, 100, 80), 0);
+        assert_eq!(chart_index(60, 10, 100, 80), 40);
+        assert_eq!(chart_index(110, 10, 100, 80), 79);
+        assert_eq!(chart_index(10, 10, 0, 0), 0);
+    }
+}

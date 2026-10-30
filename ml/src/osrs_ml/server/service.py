@@ -11,6 +11,7 @@ import httpx
 import pandas as pd
 
 from ..assembly import data_dir
+from ..battery import common_features
 from ..costs import sale_proceeds
 from ..mechanical_ceiling import Assumptions, capacity, catalogue, economics
 from . import VERSION
@@ -57,6 +58,13 @@ class Service:
                 response = self.client.get(f"{BASE}/{endpoint}")
                 response.raise_for_status()
                 payload = response.json()
+                if endpoint == "mapping":
+                    valid = isinstance(payload, list)
+                else:
+                    expected = list if endpoint.startswith("timeseries?") else dict
+                    valid = isinstance(payload, dict) and isinstance(payload.get("data"), expected)
+                if not valid:
+                    raise ValueError("Unexpected Wiki response shape")
                 value = dict(data=payload, fetched_at=now, attempted_at=now, error=None)
                 self.last_success, self.reachable = now, True
             except (httpx.HTTPError, ValueError) as exc:
@@ -121,6 +129,41 @@ class Service:
                 )
             )
         return {**value, "data": sorted(rows, key=lambda r: r["item_id"])}
+
+    def movers(self):
+        current = self.feed("5m", 300)
+        timestamp = (current["data"] or {}).get("timestamp")
+        if not timestamp:
+            return {**current, "data": []}
+        previous = self.feed(f"5m?timestamp={timestamp - 300}", 300)
+        rows = []
+        for value in [previous, current]:
+            payload = value["data"] or {}
+            for item, raw in payload.get("data", {}).items():
+                rows.append(
+                    dict(
+                        item_id=int(item),
+                        timestamp=payload["timestamp"],
+                        avg_high_price=raw.get("avgHighPrice"),
+                        avg_low_price=raw.get("avgLowPrice"),
+                        high_price_volume=raw.get("highPriceVolume", 0),
+                        low_price_volume=raw.get("lowPriceVolume", 0),
+                    )
+                )
+        frame = pd.DataFrame(rows).drop_duplicates(["item_id", "timestamp"])
+        features = common_features(frame, 300)
+        latest = features[(features.timestamp == timestamp) & features.ret.notna()].copy()
+        names = {int(r["id"]): r["name"] for r in self.items()["data"]}
+        latest["name"] = latest.item_id.map(names)
+        latest["change_pct"] = latest.ret * 100
+        latest = latest.sort_values("ret", key=abs, ascending=False)
+        return {
+            **current,
+            "data": records(latest[["item_id", "name", "price", "volume", "change_pct"]]),
+            "stale": current["stale"] or previous["stale"],
+            "error": current["error"] or previous["error"],
+            "basis": "existing battery.common_features exact 5m midpoint return; absolute change rank",
+        }
 
     def history(self, item_id, tf, limit):
         value = self.feed(
@@ -222,7 +265,11 @@ class Service:
         if kind == "battery":
             for row in rows:
                 row["verdict"] = (
-                    "survives" if row.get("survives") else row.get("status", "rejected")
+                    "survives"
+                    if row.get("survives")
+                    else "rejected"
+                    if row.get("status") == "tested"
+                    else row.get("status", "inconclusive")
                 )
         return dict(data=rows, source=str(path), basis="persisted existing research results")
 
@@ -261,17 +308,26 @@ class Service:
         return dict(snapshot_count=len(snapshots), buckets=series, ledger_rows=ledgers)
 
     def runs(self):
-        result = []
+        result, errors = [], []
         for path in sorted((ML / "runs").glob("**/run.json")):
             if "holdout" in path.parts:
+                continue
+            try:
+                metadata = json.loads(path.read_text())
+            except (ValueError, OSError) as exc:
+                errors.append(f"{path}: {exc}")
                 continue
             metrics = []
             for p in path.parent.glob("**/metrics.json"):
                 if "holdout" not in p.parts:
-                    metrics.append(
-                        dict(path=str(p.relative_to(path.parent)), values=json.loads(p.read_text()))
-                    )
-            result.append(
-                dict(path=str(path.parent), metadata=json.loads(path.read_text()), metrics=metrics)
-            )
-        return dict(data=result)
+                    try:
+                        metrics.append(
+                            dict(
+                                path=str(p.relative_to(path.parent)),
+                                values=json.loads(p.read_text()),
+                            )
+                        )
+                    except (ValueError, OSError):
+                        continue  # A newly written artifact will appear on the next refresh.
+            result.append(dict(path=str(path.parent), metadata=metadata, metrics=metrics))
+        return dict(data=result, errors=errors)
