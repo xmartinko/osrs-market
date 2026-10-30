@@ -2,6 +2,7 @@
 
 import math
 from collections import defaultdict
+from datetime import datetime, timezone
 from statistics import fmean, pstdev
 
 STYLES = (
@@ -322,6 +323,9 @@ def chart(
     fixed_bounds=None,
     box=None,
     price_only=True,
+    study_rows=None,
+    study_start=0,
+    ratio=None,
 ):
     """Prepare all geometry and studies for a rendering-only terminal client."""
     if style not in STYLES or mode not in SCALES:
@@ -413,14 +417,24 @@ def chart(
                     ]
                 )
         previous = c
+    context = study_rows if study_rows is not None else rows
+    study_values = [r["close"] for r in context]
+
+    def visible_study(points):
+        return points[study_start : study_start + len(rows)]
+
     if "SMA" in indicators:
-        overlays["SMA 20"] = sma(values)
+        overlays["SMA 20"] = visible_study(sma(study_values))
     if "EMA" in indicators:
-        overlays["EMA 20"] = ema(values)
+        overlays["EMA 20"] = visible_study(ema(study_values))
     if "BOLL" in indicators:
-        overlays.update(bollinger(values))
+        overlays.update(
+            {name: visible_study(points) for name, points in bollinger(study_values).items()}
+        )
     if "VWAP" in indicators:
-        overlays["VWAP bucket"] = vwap(values, [r.get("volume") for r in rows])
+        overlays["VWAP bucket"] = visible_study(
+            vwap(study_values, [r.get("volume") for r in context])
+        )
     study_labels = []
     for name, points in overlays.items():
         # Event charts map each study to the source bar that generated the event.
@@ -431,9 +445,16 @@ def chart(
         if plotted and plotted[-1] is not None:
             study_labels.append((f"{name} {plotted[-1]:.2f}", project(plotted[-1])))
     if "RSI" in indicators:
-        panes.append(dict(name="RSI 14", series={"RSI": rsi(values)}, bounds=[0, 100]))
+        panes.append(
+            dict(name="RSI 14", series={"RSI": visible_study(rsi(study_values))}, bounds=[0, 100])
+        )
     if "MACD" in indicators:
-        panes.append(dict(name="MACD 12/26/9", series=macd(values)))
+        panes.append(
+            dict(
+                name="MACD 12/26/9",
+                series={name: visible_study(points) for name, points in macd(study_values).items()},
+            )
+        )
     for pane in panes:
         pane["points"] = {
             name: [[i, v] for i, v in enumerate(points) if v is not None]
@@ -448,8 +469,9 @@ def chart(
     pad = max((hi - lo) * 0.08, abs(hi) * 0.00001, 0.0001)
     lo, hi = (lo - pad, hi + pad) if fixed_bounds is None else fixed_bounds
     count = max(1, len(transformed))
+    price_per_bar = ratio or abs(project(base + box) - project(base))
     if lock:
-        span = abs(project(base + box) - project(base)) * count * height * 2 / max(1, width)
+        span = price_per_bar * count * height * 2 / max(1, width)
         mid = (lo + hi) / 2
         lo, hi = mid - max(span, 0.0001) / 2, mid + max(span, 0.0001) / 2
     high, low = max(values), min(values)
@@ -477,7 +499,26 @@ def chart(
         ticks=ticks,
         panes=panes,
         volume=[[i, r.get("volume", 0)] for i, r in enumerate(rows)],
+        volume_bounds=[0, max([r.get("volume", 0) or 0 for r in rows] + [1])],
         box_size=box,
+        price_per_bar=price_per_bar,
         studies=list(overlays),
         event_axis=event_style,
+    )
+
+
+def comparison_geometry(series):
+    points = [p for item in series for p in item["points"]]
+    times = [p[0] for p in points] or [0, 1]
+    values = [p[1] for p in points] or [100]
+    first, last = min(times), max(times)
+    lo, hi = min(values + [100]), max(values + [100])
+    return dict(
+        time_bounds=[first, max(first + 1, last)],
+        bounds=[lo - 1, hi + 1],
+        time_labels=[
+            datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%d %H:%M")
+            for t in (first, last)
+        ],
+        ticks=[f"{lo - 1:.1f}", f"{(lo + hi) / 2:.1f}", f"{hi + 1:.1f}"],
     )

@@ -183,3 +183,36 @@ def test_price_only_autofit_excludes_extreme_studies():
     price = chart(data, indicators=["BOLL"], price_only=True)
     all_studies = chart(data, indicators=["BOLL"], price_only=False)
     assert price["bounds"][0] > all_studies["bounds"][0]
+
+
+def test_indicators_use_loaded_history_before_visible_window():
+    context = rows(list(range(100, 160)))
+    visible = context[-5:]
+    result = chart(
+        visible, indicators=["SMA", "EMA", "RSI", "MACD"], study_rows=context, study_start=55
+    )
+    assert result["studies"] == ["SMA 20", "EMA 20"]
+    assert len(result["panes"][0]["points"]["RSI"]) == 5
+    assert len(result["panes"][1]["points"]["Signal"]) == 5
+
+
+def test_comparison_geometry_handles_flat_and_single_observation():
+    from osrs_ml.server.charting import comparison_geometry
+
+    g = comparison_geometry([dict(points=[[100, 100], [200, 120]])])
+    assert g["bounds"] == [99, 121]
+    assert g["time_bounds"] == [100, 200]
+    assert g["ticks"] == ["99.0", "110.0", "121.0"]
+    flat = comparison_geometry([dict(points=[[100, 100]])])
+    assert flat["time_bounds"] == [100, 101]
+    assert flat["bounds"] == [99, 101]
+
+
+def test_locked_ratio_remains_constant_when_zoom_changes_visible_prices():
+    full = chart(rows([100, 105, 120, 200]), lock=True, ratio=2, width=80, height=20)
+    zoom = chart(rows([120, 200]), lock=True, ratio=2, width=80, height=20)
+
+    def span(g):
+        return g["bounds"][1] - g["bounds"][0]
+
+    assert span(full) / full["count"] == pytest.approx(span(zoom) / zoom["count"])

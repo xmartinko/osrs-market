@@ -30,6 +30,7 @@ class ChartRequest(BaseModel):
     auto_fit: bool = True
     lock: bool = False
     price_only: bool = True
+    ratio: float | None = Field(None, gt=0, allow_inf_nan=False)
     bounds: tuple[float, float] | None = None
     box: float | None = Field(None, gt=0, allow_inf_nan=False)
     width: int = Field(100, ge=1, le=1000)
@@ -192,6 +193,16 @@ class Terminal:
             None if req.auto_fit else req.bounds,
             req.box,
             req.price_only,
+            rows,
+            next(
+                (
+                    i
+                    for i, r in enumerate(rows)
+                    if visible and r["timestamp"] == visible[0]["timestamp"]
+                ),
+                0,
+            ),
+            req.ratio,
         )
         last = visible[-1] if visible else None
         first = visible[0] if visible else None
@@ -282,22 +293,34 @@ class Terminal:
     def changes(self, rows):
         def load():
             path = self.service.root / "assembled-v3/daily.parquet"
-            if not path.exists():
-                return {}
             now = int(time.time())
-            with duckdb.connect() as db:
-                data = db.execute(
-                    """WITH horizons AS (
-                        SELECT unnest([1,7,31]) AS days), candidates AS (
-                        SELECT item_id, days, timestamp, (avg_high_price+avg_low_price)/2.0 AS price,
-                            row_number() OVER (PARTITION BY item_id, days ORDER BY timestamp DESC) AS rn
-                        FROM read_parquet(?) CROSS JOIN horizons
-                        WHERE timestamp <= ? - days*86400 AND timestamp >= ? - (days+2)*86400
-                        AND avg_high_price > 0 AND avg_low_price > 0)
-                    SELECT item_id, days, price FROM candidates WHERE rn=1""",
-                    [str(path), now, now],
-                ).fetchall()
-            return {(item, days): price for item, days, price in data}
+            data = []
+            if path.exists():
+                with duckdb.connect() as db:
+                    data = db.execute(
+                        """WITH horizons AS (
+                            SELECT unnest([1,7,31]) AS days), candidates AS (
+                            SELECT item_id, days, timestamp, (avg_high_price+avg_low_price)/2.0 AS price,
+                                row_number() OVER (PARTITION BY item_id, days ORDER BY timestamp DESC) AS rn
+                            FROM read_parquet(?) CROSS JOIN horizons
+                            WHERE timestamp <= ? - days*86400 AND timestamp >= ? - (days+2)*86400
+                            AND avg_high_price > 0 AND avg_low_price > 0)
+                        SELECT item_id, days, price FROM candidates WHERE rn=1""",
+                        [str(path), now, now],
+                    ).fetchall()
+            historic = {(item, days): price for item, days, price in data}
+            for days in (1, 7, 31):
+                target = (now - days * 86400) // 86400 * 86400
+                value = self.service.feed(f"24h?timestamp={target}", 300)
+                payload = value.get("data") or {}
+                stamp = payload.get("timestamp")
+                if value.get("stale") or stamp is None or not target - 2 * 86400 <= stamp <= target:
+                    continue
+                for item, raw in payload.get("data", {}).items():
+                    high, low = raw.get("avgHighPrice"), raw.get("avgLowPrice")
+                    if high and low:
+                        historic.setdefault((int(item), days), (high + low) / 2)
+            return historic
 
         historic = self.cached("changes", load)
         return [
@@ -339,6 +362,7 @@ class Terminal:
                 common = c.comparison(series)
             return dict(
                 series=common,
+                **c.comparison_geometry(common),
                 tf=req.tf,
                 source="; ".join(dict.fromkeys(provenance)),
                 stale=stale,
@@ -382,7 +406,7 @@ class Terminal:
                 key=lambda r: r.get(key) if r.get(key) is not None else -math.inf,
                 reverse=True,
             )
-            basis += "; returns vs local daily means within 2d of requested lookback; missing stays absent"
+            basis += "; returns vs daily means within 2d of lookback (local / Wiki 24h); missing stays absent"
         elif req.kind == "MOST":
             rows = sorted(rows, key=lambda r: r["volume"], reverse=True)
             basis += "; trade-count ranking unavailable: source reports item quantity only"
@@ -419,6 +443,21 @@ class Terminal:
             if req.filter.lower() in r["name"].lower() or req.filter == str(r["item_id"])
         ]
         result = dict(data=rows, stale=market["stale"], error=market.get("error"), basis=basis)
+        if req.kind == "EQS":
+            constraints = []
+            for name, value in [
+                ("spread", req.min_spread),
+                ("volume", req.min_volume),
+                ("alch gap", req.min_alch),
+                ("buy limit", req.limit_min),
+            ]:
+                if value is not None:
+                    constraints.append(f"{name} ≥ {value:g}")
+            if req.limit_max is not None:
+                constraints.append(f"buy limit ≤ {req.limit_max}")
+            if req.members is not None:
+                constraints.append("members" if req.members else "free")
+            result["filters_label"] = " · ".join(constraints) or "none"
         if req.kind == "HMAP":
             top = sorted(
                 [r for r in rows if r["volume"] > 0], key=lambda r: r["volume"], reverse=True
