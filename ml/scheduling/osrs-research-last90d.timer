@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily private OSRS 90-day archive poll
+
+[Timer]
+OnCalendar=*-*-* 07:00:00 UTC
+RandomizedDelaySec=5m
+Unit=osrs-research-last90d.service
+
+[Install]
+WantedBy=timers.target

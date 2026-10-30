@@ -1,0 +1,9 @@
+[Unit]
+Description=Private official OSRS world population observation
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/src/osrs-market/ml
+ExecStart=%h/.local/bin/uv run --frozen python -m osrs_ml.sources official-activity
+TimeoutStartSec=3min
+Nice=10

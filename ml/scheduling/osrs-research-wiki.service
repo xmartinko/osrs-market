@@ -1,0 +1,9 @@
+[Unit]
+Description=Private Wiki v2 bulk research archive
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/src/osrs-market/ml
+ExecStart=%h/.local/bin/uv run --frozen python -m osrs_ml.sources wiki-v2-forward
+TimeoutStartSec=5min
+Nice=10

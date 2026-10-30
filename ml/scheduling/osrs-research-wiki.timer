@@ -1,0 +1,10 @@
+[Unit]
+Description=Five-minute Wiki v2 private research poll
+
+[Timer]
+OnCalendar=*:0/5
+RandomizedDelaySec=20s
+Unit=osrs-research-wiki.service
+
+[Install]
+WantedBy=timers.target

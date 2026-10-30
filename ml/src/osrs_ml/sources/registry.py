@@ -1,0 +1,46 @@
+"""Explicit private research registry; the application does not import this package."""
+from functools import partial
+
+from . import (
+    academic,
+    activity,
+    dumps,
+    jagex,
+    kaggle,
+    kaggle_other,
+    mediawiki,
+    metadata,
+    supplementary,
+    watch,
+    wayback,
+    weirdgloop,
+    wiki,
+    wiki_features,
+)
+
+SOURCES = {
+    'weirdgloop-all': partial(weirdgloop.run, kind='all'),
+    'weirdgloop-last90d': partial(weirdgloop.run, kind='last90d'),
+    'weirdgloop-archive-only': weirdgloop.archive_only,
+    'wiki-v2-forward': watch.run,
+    'wiki-v2-snapshots': wiki.snapshots,
+    'wiki-v2-repair': wiki.repair_archive_gaps,
+    'wiki-revisions': mediawiki.revisions,
+    'wiki-items': mediawiki.pages,
+    'wiki-modules': partial(mediawiki.pages, modules=True),
+    'wiki-monsters': mediawiki.monsters,
+    'wiki-shops': mediawiki.shops,
+    'wiki-feature-facts': wiki_features.run,
+    'kaggle-5m': kaggle.run,
+    'kaggle-daily': partial(kaggle_other.run, source='kaggle-daily'),
+    'kaggle-bonds': partial(kaggle_other.run, source='kaggle-bonds'),
+    'kaggle-alch': partial(supplementary.run, source='kaggle-alch'),
+    'kaggle-polls': partial(supplementary.run, source='kaggle-polls'),
+    'seasonal-dumps': dumps.run,
+    'academic-utk': academic.run,
+    'jagex-guide': jagex.run,
+    'wayback-wiki': wayback.run,
+    'official-activity': activity.run,
+    'osrsbox': lambda c, r, m: metadata.run(c, r, repository='osrsbox'),
+    'osrsreboxed': lambda c, r, m: metadata.run(c, r, repository='osrsreboxed'),
+}

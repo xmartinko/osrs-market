@@ -1,9 +1,10 @@
 """Item bonuses, weights/alchemy and monster drop definitions (not realized supply)."""
 import json
+from datetime import datetime, timezone
 
 import pyarrow as pa
 
-from .storage import completed, publish
+from .storage import completed, publish, snapshot_name
 
 SCHEMAS = {
     'items': pa.schema([('item_id', pa.int64()), ('name', pa.string()),
@@ -44,7 +45,8 @@ def adapt(payload, kind):
     return rows, drops
 
 
-def run(client, root, *, repository='osrsreboxed', snapshot='2026-10-30'):
+def run(client, root, *, repository='osrsreboxed', snapshot=None):
+    snapshot = snapshot_name(snapshot or datetime.now(timezone.utc).strftime('%Y-%m-%d'))
     directory = root / repository / snapshot
     directory.mkdir(parents=True, exist_ok=True)
     results = []
