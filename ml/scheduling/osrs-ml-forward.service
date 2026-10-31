@@ -8,4 +8,9 @@ Environment=OSRS_DATA_DIR=%h/osrs-data
 Environment="OSRS_WIKI_USER_AGENT=osrs-market private research/0.2 (https://github.com/xmartinko/osrs-market)"
 ExecStart=%h/.local/bin/uv run --project ml --frozen osrs-ml collect
 ExecStart=%h/.local/bin/uv run --project ml --frozen osrs-ml forward
-TimeoutStartSec=120
+# Allow a cold archive-index build plus complete replay; subsequent runs reuse it.
+TimeoutStartSec=600
+MemoryAccounting=yes
+MemoryMax=768M
+MemorySwapMax=0
+OOMPolicy=stop

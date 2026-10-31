@@ -111,3 +111,56 @@ def test_variable_returned_intervals_and_overlap_gate(tmp_path):
     manifest(path, source="synthetic", rows=3)
     with pytest.raises(ValueError, match="Overlapping source buckets"):
         load_snapshot(path)
+
+
+def daily_panel_rows():
+    return [dict.fromkeys(FIELDS, 1) | dict(
+        item_id=item, timestamp=step * 86400, available_at=(step + 1) * 86400 + 300,
+        source_interval_seconds=86400, resolution_seconds=86400, inverted_spread=False,
+        avg_high_price=100 + step, avg_low_price=95 + step)
+        for item in [1, 2] for step in range(60)]
+
+
+def test_daily_inference_lookback_matches_full_snapshot_features(tmp_path):
+    from osrs_ml.data import load_daily_history
+    from osrs_ml.research import FEATURES, daily_features, matrix
+
+    rows = daily_panel_rows()
+    rows[12]['avg_high_price'] = 2**40
+    rows[54]['avg_low_price'] = None
+    path = tmp_path / 'daily.parquet'
+    pq.write_table(pa.Table.from_pylist(rows), path)
+    manifest(path, source='synthetic', rows=len(rows))
+    now = 58 * 86400 + 300
+    expected = load_snapshot(path, allow_unknown_metadata=True)
+    expected = expected[expected.available_at <= now].groupby('item_id').tail(30)
+    actual = load_daily_history(path, now=now)
+    assert actual.groupby('item_id').size().eq(30).all()
+    pd.testing.assert_frame_equal(actual, expected[actual.columns].reset_index(drop=True))
+    # Include the legacy frozen model's age feature as well as today's feature set.
+    features = [*FEATURES, 'history_rows']
+    pd.testing.assert_frame_equal(matrix(daily_features(actual, labels=False), features),
+                                  matrix(daily_features(expected, labels=False), features))
+
+
+@pytest.mark.parametrize('defect', ['duplicate', 'zero', 'negative', 'null_volume',
+                                  'availability', 'interval', 'resolution'])
+def test_daily_history_checks_older_rows_outside_the_lookback(tmp_path, defect):
+    from osrs_ml.data import load_daily_history
+
+    rows = daily_panel_rows()
+    if defect == 'duplicate':
+        rows.append(rows[0].copy())
+    else:
+        key, value = {
+            'zero': ('avg_high_price', 0), 'negative': ('buy_limit', -1),
+            'null_volume': ('high_price_volume', None), 'availability': ('available_at', 0),
+            'interval': ('source_interval_seconds', 0),
+            'resolution': ('resolution_seconds', 300),
+        }[defect]
+        rows[0][key] = value
+    path = tmp_path / 'daily.parquet'
+    pq.write_table(pa.Table.from_pylist(rows), path)
+    manifest(path, source='synthetic', rows=len(rows))
+    with pytest.raises(ValueError):
+        load_daily_history(path, now=100 * 86400)

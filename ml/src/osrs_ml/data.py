@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -163,3 +164,60 @@ def load_snapshot(
         lambda t: "pre_2026_09_30" if t < REGIME_BREAK else "post_2026_09_30"
     )
     return frame
+
+
+def load_daily_history(path: Path, *, now: int, lookback: int = 30) -> pd.DataFrame:
+    """Validate the full daily panel on disk; materialize only inference inputs."""
+    if lookback <= 0:
+        raise ValueError("Positive history lookback required")
+    metadata = json.loads(path.with_suffix('.manifest.json').read_text())
+    if metadata['sha256'] != sha256(path):
+        raise ValueError('Snapshot checksum mismatch')
+    schema = pq.read_schema(path)
+    if any(schema.field(f).type != pa.int64() for f in FIELDS):
+        raise ValueError('Snapshot columns must be signed int64')
+    count = pq.ParquetFile(path).metadata.num_rows
+    if not count or count != metadata['rows']:
+        raise ValueError('Empty snapshot or manifest row-count mismatch')
+    columns = ['item_id', 'timestamp', 'available_at', 'avg_high_price', 'avg_low_price',
+               'high_price_volume', 'low_price_volume', 'inverted_spread']
+    if not set(columns + ['resolution_seconds']) <= set(schema.names):
+        raise ValueError('Daily history requires an assembled availability panel')
+    negative = ' OR '.join(f'{col}<0' for col in FIELDS if col != 'ingested_at')
+    ambiguous = 'resolution_ambiguous' if 'resolution_ambiguous' in schema.names else 'false'
+    with tempfile.TemporaryDirectory(prefix='osrs-forward-history-') as temporary:
+        with duckdb.connect(config={'memory_limit': '32MB', 'threads': 1,
+                                    'preserve_insertion_order': False,
+                                    'temp_directory': temporary}) as connection:
+            connection.read_parquet(str(path)).create_view('history')
+            bad = connection.execute(f"""SELECT
+                bool_or(item_id IS NULL OR timestamp IS NULL OR high_price_volume IS NULL
+                        OR low_price_volume IS NULL),
+                bool_or({negative}),
+                bool_or(avg_high_price=0 OR avg_low_price=0),
+                bool_or(source_interval_seconds<=0),
+                bool_or(resolution_seconds IS NULL OR resolution_seconds<>86400 OR {ambiguous}),
+                bool_or(available_at IS NULL OR available_at < timestamp +
+                        coalesce(source_interval_seconds,resolution_seconds))
+                FROM history""").fetchone()
+            errors = ['NULL keys/volumes', 'Negative source data', 'Zero price',
+                      'Nonpositive source interval', 'Select one strict daily resolution panel',
+                      'Availability precedes bucket completion']
+            for invalid, error in zip(bad, errors, strict=True):
+                if invalid:
+                    raise ValueError(error)
+            duplicate, overlap = connection.execute("""SELECT
+                bool_or(timestamp=previous), bool_or(timestamp<previous_end) FROM (
+                    SELECT timestamp,
+                        lag(timestamp) OVER w AS previous,
+                        lag(timestamp+coalesce(source_interval_seconds,resolution_seconds))
+                            OVER w AS previous_end
+                    FROM history WINDOW w AS (PARTITION BY item_id ORDER BY timestamp))""").fetchone()
+            if duplicate or overlap:
+                raise ValueError('Duplicate observations or overlapping source buckets')
+            # Project before the window sort: spill narrow keys/prices, not string metadata.
+            return connection.execute(f"""SELECT {','.join(columns)} FROM history
+                WHERE available_at<=? QUALIFY row_number() OVER (
+                    PARTITION BY item_id ORDER BY available_at DESC,timestamp DESC)<=?
+                ORDER BY item_id,available_at,timestamp""", [now, lookback]).to_arrow_table().to_pandas(
+                    types_mapper=pd.ArrowDtype)

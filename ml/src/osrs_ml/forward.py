@@ -273,6 +273,104 @@ def paper(db, observations, *, now=None, execution=None):
     return rows
 
 
+def paper_streamed(db, store, *, now, execution=None):
+    from .backtest import StreamingObservations, simulation_steps
+    from .forward_store import LedgerScores
+
+    archive_hash = store.archive_hash()
+    rows, jobs, active = [], [], []
+    cohorts = db.execute("""SELECT model,model_hash,min(issued_at) AS start,
+        max(issued_at) AS last,min(horizon_seconds) AS horizon,
+        max(horizon_seconds) AS max_horizon
+        FROM predictions GROUP BY model,model_hash""").fetchall()
+    archive_end = db.execute("""SELECT max(available_at) FROM archive_cache.observations
+                               WHERE available_at<=?""", [now]).fetchone()[0]
+
+    def buckets(feed):
+        while feed['bucket'] is not None:
+            yield feed['bucket']
+
+    for cohort in cohorts:
+        if cohort['horizon'] != cohort['max_horizon']:
+            raise ValueError("One horizon per paper ledger")
+        end = max(archive_end or cohort['start'], cohort['last'])
+        if end <= cohort['start']:
+            continue
+        key = (cohort['model'], cohort['model_hash'])
+        model = cohort['model'] + '@' + cohort['model_hash'][:12]
+        policy = PortfolioPolicy(holding_seconds=cohort['horizon'])
+        feed = {'bucket': None}
+        scores = LedgerScores(db, key)
+        cohort_jobs = []
+        for name, preset in PRESETS.items():
+            assumptions = replace(
+                preset, passive_prices=name == 'optimistic',
+                queue_fill_bps={'optimistic': 10000, 'moderate': 5000,
+                                'conservative': 2500}[name],
+            )
+            if execution is not None:
+                assumptions = replace(preset, **execution[name])
+            config = {'execution': asdict(assumptions), 'portfolio': asdict(policy)}
+            # Same identity as paper(), without a list of every prediction ID.
+            identity = hashlib.sha256((canonical([archive_hash, model, config])[:-1] + ',[').encode())
+            separator = b''
+            for p in db.execute("""SELECT id FROM predictions WHERE model=? AND model_hash=?
+                                   ORDER BY issued_at,item_id""", key):
+                identity.update(separator)
+                identity.update(canonical(p[0]).encode())
+                separator = b','
+            identity.update(b']]')
+            run_id = identity.hexdigest()
+            existing = db.execute('SELECT metrics_json FROM paper_runs WHERE id=?',
+                                  [run_id]).fetchone()
+            if existing:
+                rows.append({'model': model, 'preset': name, **json.loads(existing[0])})
+                continue
+            observations = StreamingObservations(cohort['start'], end, buckets(feed))
+            job = dict(model=model, preset=name, config=config, run_id=run_id,
+                       index=len(rows), steps=simulation_steps(observations, scores,
+                                                              assumptions, policy))
+            rows.append(None)
+            jobs.append(job)
+            cohort_jobs.append(job)
+        if cohort_jobs:
+            active.append(dict(cohort=cohort, key=key, feed=feed, jobs=cohort_jobs))
+
+    if active:
+        for timestamp, real, decisions in store.paper_events([a['cohort'] for a in active], now):
+            for replay in active:
+                if timestamp < replay['cohort']['start']:
+                    continue
+                synthetic = decisions.get(replay['key'])
+                events = {**real, **synthetic} if synthetic else real
+                if not events:
+                    continue
+                replay['feed']['bucket'] = (timestamp, events)
+                for job in replay['jobs']:
+                    next(job['steps'])
+        for replay in active:
+            replay['feed']['bucket'] = None
+        for job in jobs:
+            try:
+                next(job['steps'])
+            except StopIteration as completed:
+                result = completed.value
+            else:
+                raise AssertionError('Replay did not finish at archive end')
+            model, name, config = job['model'], job['preset'], job['config']
+            # A run and ALL its fills become visible together or roll back together.
+            with db:
+                db.execute('INSERT INTO paper_runs VALUES (?,?,?,?,?,?,?)',
+                           [job['run_id'], now, model, name, archive_hash, canonical(config),
+                            canonical(result.metrics)])
+                db.executemany('INSERT OR IGNORE INTO paper_fills VALUES (?,?,?,?)', (
+                    [digest([model, name, config, fill]), model, name, canonical(fill)]
+                    for fill in result.fills
+                ))
+            rows[job['index']] = {'model': model, 'preset': name, **result.metrics}
+    return rows
+
+
 def forward(
     archive: Path,
     ledger: Path,
@@ -282,24 +380,32 @@ def forward(
     model_dir: Path | None = None,
     history_panel: Path | None = None,
 ):
-    f = archive_observations(archive, resolution=resolution)
-    now = int(time.time())
     with connect(ledger) as db:
         old = db.execute("SELECT DISTINCT horizon_seconds FROM predictions").fetchall()
         if old and {row[0] for row in old} != {horizon}:
             raise ValueError("Horizon changed: use a separate ledger")
+        from .forward_store import ArchiveStore
+
+        store = ArchiveStore(db, ledger.with_suffix('.observations.sqlite'))
+        store.refresh(archive, resolution)
+        now = int(time.time())
+        if model_dir is None:
+            f = store.latest(now, resolution)
+        else:
+            f = archive_observations(archive, resolution=resolution)
+            now = int(time.time())
         model_scores, model_hash = None, None
         if model_dir is not None:
             if resolution != 86400 or horizon != 86400 or history_panel is None:
                 raise ValueError(
                     "Daily CatBoost requires a daily ledger, 24h horizon and history panel"
                 )
-            from .data import load_snapshot
+            from .data import load_daily_history
+            history = load_daily_history(history_panel, now=now)
             from .research import daily_features
 
-            history = load_snapshot(history_panel, allow_unknown_metadata=True)
-            history = history[history.available_at <= now].groupby("item_id").tail(30)
-            context = pd.concat([history, f[f.available_at <= now]], ignore_index=True)
+            context = pd.concat([history, f.loc[f.available_at <= now, history.columns]],
+                                ignore_index=True)
             context = context.sort_values("available_at").drop_duplicates(
                 ["item_id", "timestamp"], keep="first"
             )
@@ -315,6 +421,7 @@ def forward(
                     strict=True,
                 )
             )
+            del history, context, features
             model_hash = digest(
                 {
                     "weights": sha256(model_dir / "net_return.cbm"),
@@ -323,15 +430,17 @@ def forward(
                     "history": sha256(history_panel),
                 }
             )
+        # Record actual issuance after any disk validation and model scoring.
+        now = int(time.time())
         added = issue(
             db, f, now=now, horizon=horizon, model_scores=model_scores, model_hash=model_hash
         )
-        matured = settle(db, f, now=now)
+        matured = store.settle(now)
         execution = None
         if resolution == 86400:
             config_path = Path(__file__).resolve().parents[2] / "experiments" / "daily-v1.json"
             execution = json.loads(config_path.read_text())["execution"]
-        results = paper(db, f, now=now, execution=execution)
+        results = paper_streamed(db, store, now=now, execution=execution)
         counts = {
             t: db.execute(f"SELECT count(*) FROM {t}").fetchone()[0]
             for t in ["predictions", "outcomes", "paper_fills", "paper_runs"]

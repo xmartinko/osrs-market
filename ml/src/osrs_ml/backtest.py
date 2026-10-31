@@ -66,6 +66,13 @@ class PreparedObservations:
         ]
 
 
+class StreamingObservations:
+    """Validated, unique availability buckets replayed from a bounded disk cursor."""
+
+    def __init__(self, start, end, buckets):
+        self.start, self.end, self.buckets = start, end, buckets
+
+
 def present(row: dict, name: str) -> bool:
     return name in row and not pd.isna(row[name])
 
@@ -84,7 +91,7 @@ def compatible_volume(volume: int, mean: int, threshold: int, *, buy: bool, rule
 
 
 def simulate(
-    observations: pd.DataFrame | PreparedObservations,
+    observations: pd.DataFrame | PreparedObservations | StreamingObservations,
     scores: dict[tuple[int, int], float],
     assumptions: ExecutionAssumptions,
     portfolio: PortfolioPolicy = DEFAULT_PORTFOLIO,
@@ -92,12 +99,32 @@ def simulate(
     *,
     allocation_bps: dict[tuple[int, int], int] | None = None,
 ) -> BacktestResult:
+    steps = simulation_steps(observations, scores, assumptions, portfolio, tax,
+                             allocation_bps=allocation_bps)
+    while True:
+        try:
+            next(steps)
+        except StopIteration as completed:
+            return completed.value
+
+
+def simulation_steps(
+    observations,
+    scores,
+    assumptions,
+    portfolio=DEFAULT_PORTFOLIO,
+    tax=DEFAULT_TAX,
+    *,
+    allocation_bps=None,
+):
+    """Advance one bucket at a time, allowing replays to share an archive stream."""
+    streaming = observations if isinstance(observations, StreamingObservations) else None
     prepared = observations if isinstance(observations, PreparedObservations) else None
     if prepared is not None:
         observations = prepared.frame
-    if observations.empty:
+    if streaming is None and observations.empty:
         raise ValueError("Backtest needs observations")
-    if observations.duplicated(["item_id", "available_at"]).any():
+    if streaming is None and observations.duplicated(["item_id", "available_at"]).any():
         raise ValueError(
             "Duplicate item availability; qualify overlapping source resolutions first"
         )
@@ -164,19 +191,22 @@ def simulate(
             and (not row.get("interval_unknown", True) or assumptions.allow_unknown_metadata)
         )
 
-    start = int(observations.available_at.min())
-    end = int(observations.available_at.max())
+    start = int(streaming.start if streaming else observations.available_at.min())
+    end = int(streaming.end if streaming else observations.available_at.max())
     if end <= start:
         raise ValueError("Backtest requires positive elapsed time")
 
-    buckets = (
-        observations.groupby("available_at", sort=True) if prepared is None else prepared.buckets
-    )
+    if streaming:
+        buckets = streaming.buckets
+    elif prepared:
+        buckets = prepared.buckets
+    else:
+        buckets = observations.groupby("available_at", sort=True)
     for timestamp, group in buckets:
         now = int(timestamp)
         rows = (
             {int(row["item_id"]): row for row in group.to_dict("records")}
-            if prepared is None
+            if prepared is None and streaming is None
             else group
         )
         latest.update(rows)
@@ -495,6 +525,7 @@ def simulate(
                 "active_slots": len(active),
             }
         )
+        yield now
 
     hours = (end - start) / 3600
     # Time-weighted capital, including irregular gaps; last sample has zero duration.
