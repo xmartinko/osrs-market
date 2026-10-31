@@ -42,6 +42,24 @@ def digest(value):
     return hashlib.sha256(canonical(value).encode()).hexdigest()
 
 
+def daily_predictions(latest, model_dir):
+    """Honor the frozen model's schema, including legacy history_rows models."""
+    from catboost import CatBoostRegressor, Pool
+
+    from .research import matrix
+
+    estimator = CatBoostRegressor()
+    estimator.load_model(str(model_dir / "net_return.cbm"))
+    training = json.loads((model_dir / "training.json").read_text())
+    if training["features"] != estimator.feature_names_:
+        raise ValueError("Frozen model and training feature schemas disagree")
+    x = matrix(latest, training["features"])
+    categorical = [x.columns.get_loc("item")]
+    if categorical != estimator.get_cat_feature_indices():
+        raise ValueError("Frozen model categorical schema disagrees with the input frame")
+    return estimator.predict(Pool(x, cat_features=categorical))
+
+
 def connect(path):
     path.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(path)
@@ -276,10 +294,8 @@ def forward(
                 raise ValueError(
                     "Daily CatBoost requires a daily ledger, 24h horizon and history panel"
                 )
-            from catboost import CatBoostRegressor
-
             from .data import load_snapshot
-            from .research import daily_features, matrix
+            from .research import daily_features
 
             history = load_snapshot(history_panel, allow_unknown_metadata=True)
             history = history[history.available_at <= now].groupby("item_id").tail(30)
@@ -291,9 +307,7 @@ def forward(
             context["available_at"] = context.timestamp + 86400 + 300
             features = daily_features(context, labels=False)
             latest = features.sort_values("timestamp").drop_duplicates("item_id", keep="last")
-            estimator = CatBoostRegressor()
-            estimator.load_model(str(model_dir / "net_return.cbm"))
-            values = estimator.predict(matrix(latest)) * latest.high.to_numpy(dtype=float) / 24
+            values = daily_predictions(latest, model_dir) * latest.high.to_numpy(dtype=float) / 24
             model_scores = dict(
                 zip(
                     zip(latest.item_id.astype(int), latest.timestamp.astype(int), strict=True),

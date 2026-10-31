@@ -67,3 +67,43 @@ def test_ledger_prospective_append_only_idempotent_and_paper(tmp_path):
             db.execute("delete from predictions")
         with pytest.raises(sqlite3.IntegrityError, match="append-only"):
             db.execute('update outcomes set status="changed"')
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_daily_ledger_categorical_index_follows_frozen_frame(tmp_path, monkeypatch, legacy):
+    import json
+
+    import catboost
+    import numpy as np
+    import pandas as pd
+
+    from osrs_ml.forward import daily_predictions
+    from osrs_ml.research import FEATURES, matrix
+
+    # The deployed model predates removal of the history_rows age proxy.
+    features = list(FEATURES)
+    if legacy:
+        features.insert(features.index("high_missing"), "history_rows")
+    frame = pd.DataFrame({name: np.arange(20, dtype=float) for name in features})
+    frame["item"] = [str(i % 3) for i in range(len(frame))]
+    x = matrix(frame, features)
+    model = catboost.CatBoostRegressor(iterations=2, depth=2, verbose=False,
+                                       allow_writing_files=False, thread_count=1)
+    model.fit(x, np.arange(len(x)), cat_features=["item"])
+    model.save_model(str(tmp_path / "net_return.cbm"))
+    (tmp_path / "training.json").write_text(json.dumps({"features": features}))
+    expected = model.predict(x)
+    pool = catboost.Pool
+    seen = []
+
+    def checked_pool(data, *, cat_features):
+        assert cat_features == [data.columns.get_loc("item")]
+        assert data.columns[cat_features[0]] == "item"
+        assert cat_features == model.get_cat_feature_indices()
+        assert list(data.columns) == features
+        seen.append(cat_features)
+        return pool(data, cat_features=cat_features)
+
+    monkeypatch.setattr(catboost, "Pool", checked_pool)
+    np.testing.assert_allclose(daily_predictions(frame, tmp_path), expected)
+    assert seen == [[features.index("item")]]

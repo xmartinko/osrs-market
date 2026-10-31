@@ -78,9 +78,9 @@ def daily_features(frame: pd.DataFrame, *, labels: bool = True) -> pd.DataFrame:
     return f
 
 
-def matrix(f):
-    x = f[FEATURES].copy()
-    for col in FEATURES:
+def matrix(f, features=FEATURES):
+    x = f[list(features)].copy()
+    for col in x.columns:
         if col != "item":
             x[col] = x[col].astype(float).replace([np.inf, -np.inf], np.nan)
     return x
