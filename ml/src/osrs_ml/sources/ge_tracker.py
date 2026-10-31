@@ -195,7 +195,8 @@ def run(client, root, mapping=None, *, snapshot=None, ids=None, limit=None,
         auth = collect_authenticated(client, directory, routes, headers)
         checkpoint = directory / 'checkpoint.json'
         progress = json.loads(checkpoint.read_text()) if checkpoint.exists() else {}
-        atomic_json(checkpoint, progress)
+        if not checkpoint.exists():
+            atomic_json(checkpoint, progress)
         # Shared HTTP archive fixes catalogue/observation times across a resumed run.
         payload, record = client.json(BASE + '/items')
         items = data(payload, list)
@@ -215,12 +216,16 @@ def run(client, root, mapping=None, *, snapshot=None, ids=None, limit=None,
             selected = selected[:limit]
         for n, item_id in enumerate(selected, 1):
             state = progress.setdefault(str(item_id), {})
+            recovered = False
             for kind, route in (('weekly', f'/graph/{item_id}/all'),
                                 ('details', f'/items/{item_id}')):
                 path = directory / kind / 'items' / f'{item_id}.parquet'
                 if completed(path):
-                    state[kind] = dict(status='complete', **json.loads(
+                    saved = dict(status='complete', **json.loads(
                         path.with_suffix('.manifest.json').read_text()))
+                    if state.get(kind) != saved:
+                        state[kind] = saved
+                        recovered = True
                     continue
                 prior = state.get(kind, {})
                 application_retry = prior.get('status') == 'application error'
@@ -237,6 +242,7 @@ def run(client, root, mapping=None, *, snapshot=None, ids=None, limit=None,
                                            retry_not_before=fetched.timestamp() + 60 + random.random(),
                                            evidence=evidence)
                         atomic_json(checkpoint, progress)
+                        recovered = False
                         continue
                     if kind == 'weekly':
                         rows = adapt_graph(response, item_id, entries[item_id].get('name'))
@@ -262,8 +268,11 @@ def run(client, root, mapping=None, *, snapshot=None, ids=None, limit=None,
                     atomic_json(checkpoint, progress)
                     raise
                 atomic_json(checkpoint, progress)
+                recovered = False
             # Also repair checkpoint state when both partitions predate a crash.
-            atomic_json(checkpoint, progress)
+            # Completed items must not rewrite the whole multi-megabyte checkpoint.
+            if recovered:
+                atomic_json(checkpoint, progress)
             if n % 100 == 0 or n == len(selected):
                 current = summary(directory, progress, len(items), auth)
                 atomic_json(directory / 'summary.json', current)

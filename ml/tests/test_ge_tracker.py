@@ -76,7 +76,7 @@ class RecordedClient:
         return payload, dict(url=url, status=200, fetched_at='2026-10-30T22:22:29Z', sha256='fixture')
 
 
-def test_resume_does_not_duplicate_and_records_credentials_absent(tmp_path):
+def test_resume_does_not_duplicate_and_records_credentials_absent(tmp_path, monkeypatch):
     client = RecordedClient()
     absent = tmp_path / 'absent.env'
     first = ge.run(client, tmp_path, snapshot='recorded', credentials=absent)
@@ -88,12 +88,21 @@ def test_resume_does_not_duplicate_and_records_credentials_absent(tmp_path):
     assert len(features['ge-tracker-items']) == len(features['ge-tracker-details']) == 1
     assert not features['ge-tracker-market-watch']
     n = len(client.calls)
+    checkpoint = tmp_path / 'ge-tracker/recorded/checkpoint.json'
+    checkpoint_writes = []
+    original_atomic_json = ge.atomic_json
+    def record_write(path, value):
+        if path == checkpoint:
+            checkpoint_writes.append(path)
+        return original_atomic_json(path, value)
+    monkeypatch.setattr(ge, 'atomic_json', record_write)
     assert ge.run(client, tmp_path, credentials=absent) == first
     assert len(client.calls) == n + 1
-    checkpoint = tmp_path / 'ge-tracker/recorded/checkpoint.json'
+    assert not checkpoint_writes
     checkpoint.write_text('{}')  # crash after publish, before checkpoint
     assert ge.run(client, tmp_path, credentials=absent) == first
     assert json.loads(checkpoint.read_text())['4151']['weekly']['rows'] == 2
+    assert len(checkpoint_writes) == 1
 
 
 def test_failure_is_checkpointed_and_resume_preserves_completed_graph(tmp_path):
