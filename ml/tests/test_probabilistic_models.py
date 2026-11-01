@@ -17,7 +17,16 @@ def batch(horizon=24):
     return context, target, items
 
 
-@pytest.mark.parametrize("name", ["gaussian_diag", "gaussian_lowrank", "student_t"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "gaussian_diag",
+        "gaussian_lowrank",
+        "student_t",
+        "direct_marginal_student_t",
+        "recursive_student_t",
+    ],
+)
 def test_joint_likelihood_samples_and_finite_backward(name):
     torch.manual_seed(7)
     model = build_model(name, 5, item_count=4)

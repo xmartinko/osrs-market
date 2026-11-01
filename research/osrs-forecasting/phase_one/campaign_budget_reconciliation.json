@@ -63,12 +63,13 @@
     "consumed_e1_baseline_neural_slots": 0,
     "remaining_neural_fit_slots": 67,
     "reserved_future_campaign_plan": {
-      "status": "not_launched_pending_e1_baseline_results",
-      "max_validation_campaign_fits": 54,
-      "validation_campaign_structure": "Up to 6 pre-registered neural model/context configurations x 3 seeds x 3 chronological folds = 54 fits maximum.",
-      "max_validation_gated_prospective_refits": 9,
-      "prospective_refit_gate": "Up to 3 finalist configurations x 3 seeds = 9 fits ONLY if at least one neural family beats the strongest calibrated E1 baseline by >= 2.0% relative 3-fold item-macro scaled CRPS (and >= 5.0% relative unbiased variogram improvement for joint claims) with 90% coverage within [0.87, 0.93]; otherwise 0 refits.",
-      "unallocated_recovery_reserve": 4,
+      "status": "authorized_e2_e4_campaign_launching",
+      "max_e2_architecture_fits": 54,
+      "e2_architecture_structure": "6 neural configurations (gaussian_diag, student_t, gaussian_lowrank, direct_marginal_student_t, recursive_student_t, spline_flow campaign_v3) x 3 seeds (11, 23, 47) x 3 chronological folds (1, 2, 3) = 54 fits.",
+      "max_e3_feature_ablation_fits": 9,
+      "e3_feature_ablation_structure": "3 controlled feature representations (pilot_v1 8-col, campaign 11-col, e3_price_only 13-col no-volume/no-spread) x 3 chronological folds (seed 11) = 9 fits on the top calibrated E2 architecture.",
+      "max_e4_prospective_fits": 4,
+      "e4_prospective_gate": "Reserved strictly for future 56-day prospective period (>= 7 days post-manifest, keeping sealed holdout 1785024300 closed) ONLY if an E2/E3 candidate clears the preregistered gate against catboost_multiquantile_copula (90% coverage in [0.87, 0.93] at h in {1,4,24}, plus >= 2.0% primary scaled CRPS reduction <= 1.1375 with Holm 168h block-bootstrap p < 0.05 or >= 5.0% unbiased variogram reduction <= 94.28 without marginal CRPS loss).",
       "sum_planned_plus_reserve": 67
     }
   },
@@ -81,6 +82,7 @@
   "governance_assertions": {
     "sealed_holdout_untouched": true,
     "prior_pilot_directories_preserved_immutable": true,
-    "no_automatic_gpu_campaign_launch": true
+    "no_automatic_gpu_campaign_launch": false,
+    "user_authorized_e2_e4_at_local": "2026-11-01T02:47:11-08:00"
   }
 }
