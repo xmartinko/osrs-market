@@ -14,8 +14,8 @@ The proposal's methodological requirements remain binding. Pilot execution and `
 - Active branch: `research/osrs-phase-one-2026-11-01`. Read its latest commit; do not assume the original Phase Zero branch is current.
 - VPS working tree: `/home/martin/osrs-phase-one-worktree`.
 - Windows development copy: `C:/Users/xmart/osrs-phase-one`. Check `git status` before edits.
-- Desktop: WSL Ubuntu-24.04, `/home/xmart/osrs-research/{code,venv,venv-baselines,data,runs}`.
-- ThinkPad: `/home/martin/osrs-research/{code,venv,data,runs}`; reached via existing root SSH from VPS. The shell is fish: pipe scripts rather than relying on scp protocol behavior.
+- Desktop: WSL Ubuntu-24.04, `/home/xmart/osrs-research/{code,venv,venv-baselines,data,runs,runs_thinkpad}` (**sole active GPU node** going forward — RTX 5080).
+- ThinkPad: `/home/martin/osrs-research/{code,venv,data,runs}` — **deliberately powered OFF / retired by Martin at `2026-11-01T09:14-08:00`** after completing `100%` of its assigned `rtx3070_e2` (`27/27`) and `rtx3070_e3` (`3/3`) fits and archiving all `30` run directories to VPS and Desktop `runs_thinkpad/`. **Do NOT attempt SSH to `root@thinkpad` or treat its offline state as a failure.**
 - Central full artifacts: `/home/martin/osrs-data/phase-one-20261101/{hourly.parquet,hourly.manifest.json,runs/}`.
 - Local artifact mirror: `C:/Users/xmart/osrs-phase-one-tools/results`. Keep panels/checkpoints/per-origin rows outside Git.
 

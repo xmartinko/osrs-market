@@ -1,10 +1,11 @@
 # Phase One `E2–E4` GPU Campaign Final Status (`E2_STATUS.md`)
 
-**Last updated:** `2026-11-01T07:06:00-08:00`  
+**Last updated:** `2026-11-01T09:16:00-08:00`  
 **Campaign state:** **`E2` (`54 / 54`) AND `E3` (`9 / 9`) COMPLETED (`0` failures; `0` active GPU jobs)**  
+**Hardware node note (`2026-11-01T09:14-08:00`):** **ThinkPad RTX 3070 (`root@thinkpad`) deliberately powered OFF and retired at Martin's request** after completing `100%` of its assigned queues (`rtx3070_e2` `27/27` + `rtx3070_e3` `3/3`) and archiving all `30` run directories to VPS & Desktop WSL. Do **not** retry SSH to `root@thinkpad`; Desktop WSL2 **RTX 5080** is the sole active GPU node going forward.  
 **Branch:** `research/osrs-phase-one-2026-11-01`  
 **Evaluated commits:** `52e18603e631bd4ba79ce1621f1145b076f8f912` (`E2`), `559cc9e9ed09d9502c73131640eba5a6eb282e34` (`E3`), `git_dirty: false`  
-**Authoritative Git tree:** `C:/Users/xmart/osrs-phase-one` -> synced & SHA-256 verified across WSL (`/home/xmart/osrs-research/code`), VPS (`/home/martin/osrs-phase-one-worktree`), and ThinkPad (`/home/martin/osrs-research/code`)  
+**Authoritative Git tree:** `C:/Users/xmart/osrs-phase-one` -> synced & SHA-256 verified across WSL (`/home/xmart/osrs-research/code`) and VPS (`/home/martin/osrs-phase-one-worktree`); ThinkPad (`/home/martin/osrs-research/code`) was synced through `3c90778` prior to planned power-off  
 **Central VPS full-run archive:** `/home/martin/osrs-data/phase-one-20261101/runs/` (`63` completed run dirs, `315` file digests in `e2_e3_runs.sha256` = `5452b391892eaa4f6524addbd10cff59e6eecaa68d2b37fd6e3af261e225408a`)  
 **Sealed holdout (`>= 1785024300`):** **UNTOUCHED (`holdout_touched: false`)**
 
@@ -62,8 +63,9 @@ Every candidate was evaluated on the **identical 3-fold `complete_24h` cohort** 
 
 ---
 
-## 5. Queue Completion & Next Steps
+## 5. Queue Completion, ThinkPad Node Retirement, & Next Steps
 
-- **Queue status:** `rtx5080_e2` (`27/27`), `rtx3070_e2` (`27/27`), `rtx5080_e3` (`6/6`), and `rtx3070_e3` (`3/3`) are **100% completed**; `0` processes remain running on either GPU.
+- **Queue status:** `rtx5080_e2` (`27/27`), `rtx3070_e2` (`27/27`), `rtx5080_e3` (`6/6`), and `rtx3070_e3` (`3/3`) are **100% completed**; `0` processes remain running.
+- **ThinkPad RTX 3070 Retirement (`2026-11-01T09:14-08:00`):** Deliberately powered off by Martin with `100%` of its work completed (`27/27` `E2` + `3/3` `E3` fits) and already mirrored to `/home/xmart/osrs-research/runs_thinkpad/` (Desktop WSL) and `/home/martin/osrs-data/phase-one-20261101/runs/` (VPS). Do not treat ThinkPad unavailability as an error, do not attempt SSH to `root@thinkpad`, and schedule any future GPU work exclusively on the Desktop WSL2 **RTX 5080**.
 - **Full writeup:** Read [`e2_e3_campaign_results.md`](e2_e3_campaign_results.md) for fold/seed dispersion, censoring (`endpoint_marginal`), liquidity strata, likelihoods, and `72h/168h/336h/stationary` bootstrap sensitivity.
-- **`E4` Prospective Governance:** The `4` remaining `E4` slots remain **unspent** and the sealed historical holdout (`1785024300`) remains **closed**. Any future `E4` execution requires freezing a live 56-day prospective window `>= 7` days post-manifest (`recursive_student_t`, choosing between parsimonious `13`-col `e3_price_only` and `19`-col `e2_matched`).
+- **`E4` Prospective Governance:** The `4` remaining `E4` slots remain **unspent** and the sealed historical holdout (`1785024300`) remains **closed**. Any future `E4` execution requires freezing a live 56-day prospective window `>= 7` days post-manifest on the Desktop **RTX 5080** alone (`recursive_student_t`, choosing between parsimonious `13`-col `e3_price_only` and `19`-col `e2_matched`).
