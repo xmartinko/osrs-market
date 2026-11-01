@@ -1,13 +1,14 @@
 # Phase One `P1` Economic Backtest: Converting `recursive_student_t` into a Sized OSRS Grand Exchange Policy
 
-**Last updated:** `2026-11-01T11:58:00-08:00`  
-**Status:** **`COMPLETED — HONEST NEGATIVE ECONOMIC RESULT (REAL GROSS FORECAST ALPHA DEVOURED BY SPREAD + GE TAX + WHOLE-BUCKET LATENCY WALL)`**  
+**Last updated:** `2026-11-01T13:26:00-08:00`  
+**Status:** **`COMPLETED & CLEAN-COMMIT REPRODUCED (`git_dirty: false`) — HONEST NEGATIVE ECONOMIC RESULT`**  
 **Branch:** `research/osrs-phase-one-2026-11-01`  
 **Preregistration manifest (committed at `ab9a736` BEFORE validation P/L):** [`p1_backtest_protocol.json`](p1_backtest_protocol.json) (`SHA-256: 88d12b89967c7ec4c56f340f0a26e2e9f75411ae7099839d1fd7d1b1d89f4ad0`)  
-**Machine-readable results:** [`p1_backtest_results.json`](p1_backtest_results.json) (`SHA-256: d0441bafa4dd7b188c05541ffd77de87c887f56217f8bdb3e4e9753f7435f855`)  
+**Clean execution commit:** `e34821fd6dd494e7cbcc455ca8061a0048298c5f` (`git_dirty: false`; bit-for-bit identical to initial `ab9a736` -> `96d33eb` run — see Section 9)  
+**Machine-readable results:** [`p1_backtest_results.json`](p1_backtest_results.json) (`SHA-256: b66149924ab94adfcbe912c6aaf1b341b3ac1a69fddf12c87b4fc272ad630298`)  
 **Runner & test suite (`81 / 81` passing):** [`ml/src/osrs_ml/probabilistic_backtest.py`](../../../ml/src/osrs_ml/probabilistic_backtest.py), [`ml/tests/test_probabilistic_backtest.py`](../../../ml/tests/test_probabilistic_backtest.py)  
 **Full run archive (ledgers & quantile caches outside Git):** `/home/martin/osrs-data/phase-one-20261101/runs/p1_backtest_recursive_student_t/` (VPS) & `/home/xmart/osrs-research/runs/p1_backtest_recursive_student_t/` (Desktop WSL)  
-**Scope & Governance:** Development validation backtest across the three `E2/E3` validation folds (`2025-10-29` .. `2026-07-26`, `6,407` hours, `74` items). **`0` `E4` slots consumed** (`68 / 72` neural fit budget unchanged; `4 / 72` `E4` reserve untouched). **Sealed holdout (`>= 1785024300`) strictly closed (`holdout_touched: false`).** Executed on Desktop WSL2 **RTX 5080** (`1,072.1s` wall time; ThinkPad **RTX 3070** `root@thinkpad` online & available opportunistically).
+**Scope & Governance:** Development validation backtest across the three `E2/E3` validation folds (`2025-10-29` .. `2026-07-26`, `6,407` hours, `74` items). **`0` `E4` slots consumed** (`68 / 72` neural fit budget unchanged; `4 / 72` `E4` reserve untouched). **Sealed holdout (`>= 1785024300`) strictly closed (`holdout_touched: false`).** Executed on Desktop WSL2 **RTX 5080** (`1,037.3s` clean cold-start wall time; ThinkPad **RTX 3070** `root@thinkpad` online & available opportunistically).
 
 ---
 
@@ -193,8 +194,23 @@ Every null control passes transformed quantiles into the **identical** `build_po
 
 ---
 
-## 8. Implications for Phase One & Prospective Work
+## 8. Implications for Phase One & Follow-Up Execution-Resolution Test (`P1b`)
 
-1. **Statistical Forecast Validity Confirmed, Hourly Trading Alpha Rejected:** `recursive_student_t` is a genuine statistical improvement on multi-horizon trajectory calibration (`Gate B` variogram `-6.40%`) and directional gross return forecasting (`p = 0.0025` vs time-shuffled null), **but an hourly-bar Grand Exchange strategy cannot monetize `~1.12%` median 24h moves across a `4.34%–4.54%` realised round-trip spread+tax wall and a `>= 1h05m` whole-bucket latency gap.**
-2. **Where Any Viable Execution Edge Would Have to Live:** Overcoming the `79%` `h = 1` ceiling-expiry loss and `2.64%` delayed fill spread requires **5-minute (`300s`) live prospective execution** (cutting observation-to-order latency from `3,900s + 300s` down to `~300s`, i.e., inside the live `osrs-ml-forward` pipeline) and explicit **spread-dynamics forecasting** (predicting future `h + H` exit spread rather than assuming current compressed `ask_t - bid_t` persists).
+1. **Statistical Forecast Validity Confirmed, Hourly Trading Alpha Rejected:** `recursive_student_t` is a genuine statistical improvement on multi-horizon trajectory calibration (`Gate B` variogram `-6.40%`) and directional gross return forecasting (`p = 0.0025` vs time-shuffled null), **but an hourly-bar Grand Exchange strategy cannot monetize `~1.12%` median 24h moves across a `4.34%–4.54%` realised round-trip spread+tax wall and a `>= 1h05m` (`~4,200s`) whole-bucket latency gap.**
+2. **Latency vs Spread Is Directly Testable on Historical `300s` Bars (`P1b` — No Live Wait Required):** Testing whether the `79.1%` ceiling-expiry loss and `2.64%` delayed-fill spread are caused by `3600s` whole-bucket execution latency (`~4,200s` observation-to-fill) rather than the spread wall itself **does not require waiting for a live prospective window**: the repository's canonical `300s` mirror (`kaggle-5m/canonical-v2/main/prices_5m`, `2021–2026`) and `assembled-v3/intraday_5m.parquet` already span the exact three validation folds (`2025-10-29` .. `2026-07-26`). Follow-up experiment **`P1b`** holds the preregistered policy, `recursive_student_t` quantiles, and `osrs_ml.{costs,execution,backtest}` machinery fixed while resolving execution on `300s` bars (`~600–900s` observation-to-fill latency), while explicitly accounting for the averaged-bar limitation (`300s` bucket means still cannot observe intra-bar limit-order queue priority).
 3. **Governance:** `0` `E4` slots were used (`4 / 72` remain untouched) and sealed holdout `1785024300` remains strictly closed (`holdout_touched: false`).
+
+---
+
+## 9. Git Provenance Reconciliation & Clean-Commit Reproduction (`git_dirty: false`)
+
+1. **Exact Enumeration of Working-Tree State During Initial `ab9a736` Run:**
+   - At initial execution time (`code_commit = ab9a7364e3a066a8454498b1ef28651ca39e3914`, the preregistration commit), **`0` tracked files were modified** in `/home/xmart/osrs-research/code`.
+   - Exactly **`2` untracked new files** existed in `/home/xmart/osrs-research/code`:
+     1. `?? ml/src/osrs_ml/probabilistic_backtest.py` (`SHA-256: a81f9d9b0e89e13076ff3adb20c85eaf82492b72a34e5e68c0b51e8fbdd7a628`) — **in the execution path** (`__main__` entrypoint for `P1`), untracked at `ab9a736` solely because `p1_backtest_protocol.json` was committed first at `ab9a736` before committing the runner + results together at `96d33eb9dbfbf0f293247cccf777f70a277c65e3` with the identical `SHA-256`.
+     2. `?? ml/tests/test_probabilistic_backtest.py` (`SHA-256: 9256e9cfbc466d5eaa8158b26bdfeb01ad8a5a932549b123576055f25f958cad`) — pytest unit suite only (outside the `P1` import/execution path), likewise committed byte-identically at `96d33eb`.
+2. **Complete Import-Closure SHA-256 Verification (`ab9a736` vs `96d33eb` vs `e34821f`):**
+   - Every dependency imported by `osrs_ml.probabilistic_backtest` had identical Git blob SHA-256 digests across `ab9a736`, `96d33eb`, and `e34821f`: `backtest.py` (`90a3b4bb...`), `costs.py` (`cc32a66f...`), `execution.py` (`0c8e9277...`), `probabilistic_campaign.py` (`c223a0a4...`), `probabilistic_models.py` (`9a57b1ac...`), `probabilistic_train.py` (`a662eee8...`), `probabilistic_evaluation.py` (`775e3969...`), `probabilistic_baselines.py` (`b97eac15...`), `probabilistic_data.py` (`8f2423bc...`), and `__init__.py` (`72b4328f...`).
+3. **Cold-Start Clean-Commit Reproduction (`e34821fd6dd494e7cbcc455ca8061a0048298c5f`, `git_dirty: false`):**
+   - Because `probabilistic_backtest.py` was `__main__`, the entire `P1` pipeline was re-executed from cold start (fresh output directory with zero cached quantiles, full RTX 5080 Monte Carlo trajectory sampling from the 9 frozen `E2` checkpoints, plus all grid cells, null controls, and sensitivities) on strictly clean commit `e34821fd6dd494e7cbcc455ca8061a0048298c5f` (`git status --porcelain == ""` verified before and after execution).
+   - **Bitwise & Numerical Parity Confirmed:** [`p1_backtest_results.json`](p1_backtest_results.json) now records `"code_commit": "e34821fd6dd494e7cbcc455ca8061a0048298c5f"` and `"git_dirty": false`; all `6` `source_module_sha256` digests, all `3` compressed GPU quantile cache hashes (`80febc95...`, `c97c26bd...`, `014ffebf...`), and **100% of numerical results across every metric, grid cell, null control, and sensitivity arm matched the initial run identically (`diff = 0`)**.

@@ -2,14 +2,14 @@
   "experiment_id": "P1_RECURSIVE_STUDENT_T_ECONOMIC_BACKTEST",
   "protocol_id": "OSRS_PHASE_ONE_P1_ECONOMIC_BACKTEST",
   "protocol_sha256": "88d12b89967c7ec4c56f340f0a26e2e9f75411ae7099839d1fd7d1b1d89f4ad0",
-  "generated_at_unix": 1793562921.9004667,
-  "elapsed_seconds": 1072.077,
+  "generated_at_unix": 1793568317.894102,
+  "elapsed_seconds": 1037.296,
   "e4_slots_consumed": 0,
   "holdout_start": 1785024300,
   "holdout_touched": false,
   "provenance": {
-    "code_commit": "ab9a7364e3a066a8454498b1ef28651ca39e3914",
-    "git_dirty": true,
+    "code_commit": "e34821fd6dd494e7cbcc455ca8061a0048298c5f",
+    "git_dirty": false,
     "code_tree": "/home/xmart/osrs-research/code",
     "module_dir": "/home/xmart/osrs-research/code/ml/src/osrs_ml",
     "authoritative_git_tree": "C:/Users/xmart/osrs-phase-one",
@@ -60,7 +60,7 @@
         "quantiles_npz_sha256": "80febc95c68e49d248524af37b776f1a1f5958bca1ec1efeceae736a69b9841c",
         "device": "cuda:0",
         "gpu": "NVIDIA GeForce RTX 5080",
-        "elapsed_seconds": 310.84,
+        "elapsed_seconds": 297.001,
         "holdout_touched": false
       },
       "2": {
@@ -98,7 +98,7 @@
         "quantiles_npz_sha256": "c97c26bdc99dafb3b774a81a62623bf5a5e816c4ca9dc177cda6c4ce0273a18c",
         "device": "cuda:0",
         "gpu": "NVIDIA GeForce RTX 5080",
-        "elapsed_seconds": 311.508,
+        "elapsed_seconds": 307.276,
         "holdout_touched": false
       },
       "3": {
@@ -136,7 +136,7 @@
         "quantiles_npz_sha256": "014ffebfc8385d0d89c85b0cfe0dbb2270528d7cab5f1209b71256e3ac3088e8",
         "device": "cuda:0",
         "gpu": "NVIDIA GeForce RTX 5080",
-        "elapsed_seconds": 304.275,
+        "elapsed_seconds": 290.912,
         "holdout_touched": false
       }
     }
