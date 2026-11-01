@@ -1,0 +1,98 @@
+{
+  "protocol_id": "OSRS_PHASE_ONE_P1B_300S_EXECUTION_BACKTEST",
+  "preregistered_at_local": "2026-11-01T14:41:00-08:00",
+  "branch": "research/osrs-phase-one-2026-11-01",
+  "parent_experiment_id": "P1_RECURSIVE_STUDENT_T_ECONOMIC_BACKTEST",
+  "parent_protocol_sha256": "88d12b89967c7ec4c56f340f0a26e2e9f75411ae7099839d1fd7d1b1d89f4ad0",
+  "parent_clean_results_sha256": "b66149924ab94adfcbe912c6aaf1b341b3ac1a69fddf12c87b4fc272ad630298",
+  "experiment_type": "retrospective_execution_resolution_contrast_300s_vs_3600s_not_prospective_not_E4",
+  "e4_slots_consumed": 0,
+  "protected_holdout_start": 1785024300,
+  "holdout_access_permitted": false,
+  "inputs": {
+    "hourly_panel_parquet_sha256": "5a5bf0fa4d656b24b4df5883804fbb32068e5c0262924c3d51ccffe93af321a8",
+    "hourly_panel_manifest_sha256": "6b4f501c4bf54c33df386caf5f4e46679d9273bddaf3cb6dc6ed967b32d9754f",
+    "items_metadata_parquet_sha256": "f45db02de79e91b86fd03dc7ea0a5cd0cf00a9558a1040ab3a32b4e283a860f4",
+    "staged_5m_execution_parquet": {
+      "path": "/home/xmart/osrs-research/data/p1b_5m/prices_5m_p1b.parquet",
+      "bytes": 1366990873,
+      "sha256": "2fbe998bc7b798570cb01adf7f692446aaf9ff1b7bf741e7c8859e0695a04fed",
+      "rows_footer": 160997249,
+      "footer_sha256": "2a931ca48bd1354710edefd736fe1e2b6b231d6e975b7e16793fe961a38661a4",
+      "schema_sha256": "7d06af5057adf579bf7c25d8efec4f18b8e482b19c4450d9567325d3629f45b9",
+      "holdout_boundary_enforcement": "Parquet scan enforces item_id IN (74 Phase-One selected_ids) AND ts >= 1759622400 AND ts < 1785024000 AND ts < 1785024300 via DuckDB pushdown BEFORE Python materialization; evaluation windows further enforce available_at < window_end <= 1785024000 < 1785024300. Zero rows at or after 1785024000 / 1785024300 are ever read.",
+      "schema": "item_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64"
+    },
+    "frozen_p1_quantile_caches_sha256": {
+      "1": "80febc95c68e49d248524af37b776f1a1f5958bca1ec1efeceae736a69b9841c",
+      "2": "c97c26bdc99dafb3b774a81a62623bf5a5e816c4ca9dc177cda6c4ce0273a18c",
+      "3": "014ffebfc8385d0d89c85b0cfe0dbb2270528d7cab5f1209b71256e3ac3088e8"
+    },
+    "selected_model": "recursive_student_t",
+    "pooled_samples_per_origin": 768
+  },
+  "explicit_methodological_limitations": {
+    "retrospective_not_prospective": "P1b is a retrospective execution-resolution experiment on historical development folds (2025-10-29..2026-07-26), holding the hourly signal origins and frozen recursive_student_t quantiles fixed while resolving order execution on historical 300s bars rather than 3600s bars. It is not a live prospective forward test.",
+    "five_minute_averaged_quotes_limitation": "prices_5m_p1b.parquet is derived from kaggle-5m canonical 300s buckets (volume-weighted 5-minute directional trade averages). Averaged 300s bars CANNOT represent intra-bar limit-order book depth, resting queue priority, hidden liquidity, or continuous-time price paths within a 5-minute interval.",
+    "missing_side_and_null_midpoint_handling": "mid_price is NULL whenever only one directional side printed in a 300s bar. Missing sides and mid_price are NEVER imputed: directional ask (avg_high_price) and bid (avg_low_price) are tracked independently via causal last-print freshness (high_freshness_seconds, low_freshness_seconds) identically to P1, while per-bucket fill capacity uses observed directional volume (0 when a side did not print, guaranteeing zero fills on non-printing sides)."
+  },
+  "single_changed_variable_ceteris_paribus": {
+    "unchanged_from_p1": [
+      "Identical 74 items and identical 3 inner-training (21d) + outer-validation (90d) windows (2025-10-29..2026-07-26)",
+      "Identical frozen recursive_student_t 768-path quantiles and identical hourly signal timestamps (now = t_hour + 3900), scores, and dynamic allocation_bps",
+      "Identical osrs_ml.costs (2.00% GE tax, 49 GP exemption, 5M/unit cap, integer_lots_v2), osrs_ml.execution, and osrs_ml.backtest.simulate machinery",
+      "Identical primary ExecutionAssumptions parameters (passive_prices=false, fill_model=bucket_proxy_v1, price_model=integer_lots_v2, participation_bps=200, slippage_bps=10, latency_seconds=300, max_freshness_seconds=7500, buy_timeout_seconds=7500, terminal_haircut_bps=100)",
+      "Identical 2x3 training-only tuning grid (H in {4, 24} hours x min_net_edge_bps in {0, 25, 50}) and identical 3 null controls (null_time_shuffled x5, null_sign_flipped, null_detrended_zero_drift)"
+    ],
+    "changed_in_p1b": {
+      "execution_bar_resolution_seconds": {
+        "p1": 3600,
+        "p1b": 300
+      },
+      "effective_observation_to_first_eligible_fill_latency": {
+        "p1_3600s": "Signal submitted at t_hour + 3900; bucket h=1 [t_hour+3600, t_hour+7200) is ineligible because start < submitted + 300; earliest fill bucket is h=2 [t_hour+7200, t_hour+10800) publishing at t_hour + 11100 (3,300s to 7,200s after submission; ~4,200s+ post-origin-end).",
+        "p1b_300s_primary_delay300s": "Each 300s bucket [ts, ts+300) becomes available at ts + 600 (300s bucket + 300s publication delay, matching hourly.parquet). Signal submitted at t_hour + 3900 (coinciding with bar ts = t_hour + 3300); earliest post-latency fill bar is ts = t_hour + 4200 [t_hour+4200, t_hour+4500) available at t_hour + 4800 (300s to 900s post-submission), with up to 22 post-latency 300s buckets inside buy_timeout_seconds = 7500.",
+        "p1b_300s_sensitivity_delay0s": "Secondary timing sensitivity with available_at = ts + 300 (0s publication delay on 300s bars; earliest fill bar still ts = t_hour + 4200 available at t_hour + 4500 = 300s to 600s post-submission) plus tight 30-minute buy_timeout_seconds = 1800 sensitivity."
+      }
+    }
+  },
+  "falsifiable_predictions_and_decision_matrix": {
+    "p1_hourly_reference_benchmarks": {
+      "walkforward_unit_fill_rate_pct": 6.72,
+      "h24_edge0_unit_fill_rate_pct": 8.91,
+      "walkforward_zero_fill_ceiling_expiry_pct": 79.12,
+      "h24_edge0_zero_fill_ceiling_expiry_pct": 75.38,
+      "walkforward_origin_modelled_spread_median_pct": 0.79,
+      "h24_edge0_origin_modelled_spread_median_pct": 0.99,
+      "walkforward_realised_roundtrip_spread_incl_slip_median_pct": 2.64,
+      "walkforward_realised_minus_origin_spread_delta_pp": 1.85,
+      "h24_edge0_realised_minus_origin_spread_delta_pp": 1.65,
+      "walkforward_net_gp": -71792,
+      "walkforward_p_gt_zero": 1.0,
+      "h24_edge0_net_gp": 1184045,
+      "h24_edge0_p_gt_zero": 0.1224
+    },
+    "predictions_if_latency_is_binding_constraint": [
+      "P_fill: Unit fill rate on walk-forward (and H24h_edge0bps) increases materially above P1's 6.72% (and 8.91%), specifically >= 15.0% (>2x P1).",
+      "P_expiry: Zero-fill buy ceiling-expiry rate shrinks materially below P1's 79.12% (and 75.38%), specifically <= 50.0%.",
+      "P_spread: Median realised round-trip spread + slippage compresses materially from P1's 2.64% toward the origin-modelled ~0.79%-0.99% (specifically < 2.00%, cutting the +1.65 to +1.85 pp adverse spread delta by at least one-third).",
+      "P_pnl: Walk-forward net P/L moves upward from -71,792 GP into positive territory (> 0 GP), and if latency alone prevented monetisation, clears 168h block-bootstrap p < 0.05 against 0 GP."
+    ],
+    "falsification_interpretation_rules": {
+      "case_1_latency_confirmed_and_monetisable": "P_fill, P_expiry, P_spread hold AND net P/L > 0 with 168h block-bootstrap p < 0.05 -> 3600s whole-bucket latency was the binding barrier; 300s execution unlocks statistically significant net GP on averaged bars (still subject to live order-book queue validation).",
+      "case_2_latency_improves_fills_but_spread_wall_still_kills_net_pnl": "P_fill and P_expiry hold (higher fill rate, lower ceiling-expiry loss), yet realised round-trip spread + 2% GE tax still leaves net P/L <= 0 GP or statistically indistinguishable from 0 GP (p >= 0.05) -> Whole-bucket latency was real for fill mechanics, NOT sufficient for profitability: the Grand Exchange bid-ask spread + 2% tax wall itself dominates recursive_student_t's 1h-24h signal amplitude.",
+      "case_3_300s_spread_wider_than_hourly_vwap": "Realised round-trip spread on 300s bars does not compress toward 0.99% (or widens above 2.64%) -> Hourly VWAP aggregation smoothed intra-hour bid-ask bounce; true 5-minute directional execution faces an even steeper microstructural spread wall."
+    }
+  },
+  "sensitivities_registered": [
+    "primary_ceteris_paribus_delay300s_timeout7500s_part200bps",
+    "crossed_participation_50bps",
+    "crossed_participation_500bps",
+    "tight_intraday_timeout_1800s_freshness_1800s",
+    "availability_delay_0s_ts_plus_300",
+    "p1_fair_walkforward_fixed_cells_contrast",
+    "capital_10m_gp",
+    "lobster_tax_exempt_379",
+    "passive_v3_200bps_contrast"
+  ]
+}
