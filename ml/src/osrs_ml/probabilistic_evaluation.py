@@ -210,6 +210,45 @@ def energy_score(samples, targets):
     ) - 0.5 * pair_distance.mean(axis=1)
 
 
+def variogram_score_both(samples, targets, *, power=0.5, weights=None):
+    """Return ``(plugin [B], unbiased [B])`` variogram scores in a single pass."""
+    samples, targets = _validated(samples, targets)
+    draws = samples.shape[1]
+    horizon = samples.shape[2]
+    if draws < 2:
+        raise ValueError("variogram_score_both requires at least two draws")
+    if not np.isfinite(power) or not 0 < power < 2:
+        raise ValueError("Variogram power must lie strictly between zero and two")
+    weights = np.ones((horizon, horizon)) if weights is None else np.asarray(weights, dtype=float)
+    if (
+        weights.shape != (horizon, horizon)
+        or not np.isfinite(weights).all()
+        or np.any(weights < 0)
+        or not np.allclose(weights, weights.T)
+    ):
+        raise ValueError("Weights must be a finite nonnegative symmetric [H,H] matrix")
+    plugin = np.zeros(samples.shape[0], dtype=np.float64)
+    unbiased = np.zeros(samples.shape[0], dtype=np.float64)
+    use_sqrt = power == 0.5
+    inv_draws = 1.0 / draws
+    for left in range(horizon):
+        s_left = samples[:, :, left]
+        t_left = targets[:, left]
+        for right in range(left + 1, horizon):
+            weight = weights[left, right]
+            if weight == 0:
+                continue
+            abs_s = np.abs(s_left - samples[:, :, right])
+            abs_t = np.abs(t_left - targets[:, right])
+            diff_p = np.sqrt(abs_s) if use_sqrt else abs_s**power
+            observed = np.sqrt(abs_t) if use_sqrt else abs_t**power
+            forecast = np.mean(diff_p, axis=1)
+            sq = (observed - forecast) ** 2
+            plugin += weight * sq
+            unbiased += weight * (sq - np.var(diff_p, axis=1, ddof=1) * inv_draws)
+    return plugin, unbiased
+
+
 def variogram_score(samples, targets, *, power=0.5, weights=None, estimator="plugin"):
     """Return [B] variogram score, summing each unordered horizon pair once.
 
@@ -223,6 +262,8 @@ def variogram_score(samples, targets, *, power=0.5, weights=None, estimator="plu
     horizon = samples.shape[2]
     if estimator not in {"plugin", "unbiased"} or (estimator == "unbiased" and draws < 2):
         raise ValueError("estimator must be 'plugin' or 'unbiased' (with at least two draws)")
+    if estimator == "unbiased":
+        return variogram_score_both(samples, targets, power=power, weights=weights)[1]
     if not np.isfinite(power) or not 0 < power < 2:
         raise ValueError("Variogram power must lie strictly between zero and two")
     weights = np.ones((horizon, horizon)) if weights is None else np.asarray(weights, dtype=float)
@@ -233,19 +274,21 @@ def variogram_score(samples, targets, *, power=0.5, weights=None, estimator="plu
         or not np.allclose(weights, weights.T)
     ):
         raise ValueError("Weights must be a finite nonnegative symmetric [H,H] matrix")
-    result = np.zeros(samples.shape[0])
+    result = np.zeros(samples.shape[0], dtype=np.float64)
+    use_sqrt = power == 0.5
     for left in range(horizon):
+        s_left = samples[:, :, left]
+        t_left = targets[:, left]
         for right in range(left + 1, horizon):
             weight = weights[left, right]
             if weight == 0:
                 continue
-            diff_p = np.abs(samples[:, :, left] - samples[:, :, right]) ** power
+            abs_s = np.abs(s_left - samples[:, :, right])
+            abs_t = np.abs(t_left - targets[:, right])
+            diff_p = np.sqrt(abs_s) if use_sqrt else abs_s**power
+            observed = np.sqrt(abs_t) if use_sqrt else abs_t**power
             forecast = np.mean(diff_p, axis=1)
-            observed = np.abs(targets[:, left] - targets[:, right]) ** power
-            term = (observed - forecast) ** 2
-            if estimator == "unbiased":
-                term = term - np.var(diff_p, axis=1, ddof=1) / draws
-            result += weight * term
+            result += weight * (observed - forecast) ** 2
     return result
 
 
@@ -255,11 +298,7 @@ def shuffle_horizon_dependence(samples, *, seed=0):
     if samples.ndim != 3 or min(samples.shape) < 1 or not np.isfinite(samples).all():
         raise ValueError("Expected nonempty finite [B,M,H] samples")
     rng = np.random.default_rng(seed)
-    result = samples.copy()
-    for batch in range(samples.shape[0]):
-        for horizon in range(samples.shape[2]):
-            result[batch, :, horizon] = samples[batch, rng.permutation(samples.shape[1]), horizon]
-    return result
+    return rng.permuted(samples, axis=1)
 
 
 def random_walk_samples(

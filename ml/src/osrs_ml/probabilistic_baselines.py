@@ -40,7 +40,7 @@ from .probabilistic_evaluation import (
     quantile_interval_scores,
     sample_crps,
     shuffle_horizon_dependence,
-    variogram_score,
+    variogram_score_both,
 )
 from .probabilistic_train import (
     CONTEXT,
@@ -755,7 +755,7 @@ def _simulate_ma1_garch11(
     return np.cumsum(inc_paths, axis=-1)
 
 
-def generate_per_item_forecasts(
+def iter_per_item_forecasts(
     panel,
     item_idx: int,
     train_start: int,
@@ -765,8 +765,8 @@ def generate_per_item_forecasts(
     seed: int,
     *,
     models_to_run: tuple[str, ...] = PER_ITEM_BASELINES,
-) -> dict[str, np.ndarray]:
-    """Generate [B, M, H] cumulative log-return forecasts for one item strictly causally."""
+):
+    """Yield ``(model_name, paths [B, M, H])`` one baseline at a time to bound peak RSS."""
     times = panel.times
     log_price = np.log(panel.prices[item_idx])
     returns = panel.returns[item_idx]
@@ -787,21 +787,22 @@ def generate_per_item_forecasts(
     sub_eval_origins = eval_origins - train_start_idx
 
     n_orig = len(eval_origins)
-    out: dict[str, np.ndarray] = {}
 
     if "no_change" in models_to_run:
-        out["no_change"] = np.zeros((n_orig, draws, HORIZON), dtype=np.float64)
+        yield "no_change", np.zeros((n_orig, draws, HORIZON), dtype=np.float64)
 
     if "gaussian_rw_std" in models_to_run:
         rng = np.random.default_rng(seed + 1001)
-        out["gaussian_rw_std"] = np.cumsum(
-            rng.normal(scale=scale_std, size=(n_orig, draws, HORIZON)), axis=-1
+        yield (
+            "gaussian_rw_std",
+            np.cumsum(rng.normal(scale=scale_std, size=(n_orig, draws, HORIZON)), axis=-1),
         )
 
     if "gaussian_rw_mad" in models_to_run:
         rng = np.random.default_rng(seed + 1002)
-        out["gaussian_rw_mad"] = np.cumsum(
-            rng.normal(scale=scale_mad, size=(n_orig, draws, HORIZON)), axis=-1
+        yield (
+            "gaussian_rw_mad",
+            np.cumsum(rng.normal(scale=scale_mad, size=(n_orig, draws, HORIZON)), axis=-1),
         )
 
     r_train_valid = sub_returns[:sub_train_len]
@@ -811,7 +812,7 @@ def generate_per_item_forecasts(
     if "empirical_iid_rw" in models_to_run:
         rng = np.random.default_rng(seed + 1003)
         idx = rng.integers(len(r_train_centered), size=(n_orig, draws, HORIZON))
-        out["empirical_iid_rw"] = np.cumsum(r_train_centered[idx], axis=-1)
+        yield "empirical_iid_rw", np.cumsum(r_train_centered[idx], axis=-1)
 
     if "empirical_block24_rw" in models_to_run:
         rng = np.random.default_rng(seed + 1004)
@@ -826,10 +827,10 @@ def generate_per_item_forecasts(
         if len(block_paths) >= 16:
             bank = np.asarray(block_paths, dtype=np.float64)
             choice = rng.integers(len(bank), size=(n_orig, draws))
-            out["empirical_block24_rw"] = bank[choice]
+            yield "empirical_block24_rw", bank[choice]
         else:
             idx = rng.integers(len(r_train_centered), size=(n_orig, draws, HORIZON))
-            out["empirical_block24_rw"] = np.cumsum(r_train_centered[idx], axis=-1)
+            yield "empirical_block24_rw", np.cumsum(r_train_centered[idx], axis=-1)
 
     if "rolling_168h_gaussian" in models_to_run or "rolling_168h_drift_gaussian" in models_to_run:
         local_std = np.empty(n_orig, dtype=np.float64)
@@ -846,14 +847,14 @@ def generate_per_item_forecasts(
         if "rolling_168h_gaussian" in models_to_run:
             rng = np.random.default_rng(seed + 1005)
             shocks = rng.normal(size=(n_orig, draws, HORIZON)) * local_std[:, None, None]
-            out["rolling_168h_gaussian"] = np.cumsum(shocks, axis=-1)
+            yield "rolling_168h_gaussian", np.cumsum(shocks, axis=-1)
         if "rolling_168h_drift_gaussian" in models_to_run:
             rng = np.random.default_rng(seed + 1006)
             shocks = (
                 rng.normal(size=(n_orig, draws, HORIZON)) * local_std[:, None, None]
                 + local_mean[:, None, None]
             )
-            out["rolling_168h_drift_gaussian"] = np.cumsum(shocks, axis=-1)
+            yield "rolling_168h_drift_gaussian", np.cumsum(shocks, axis=-1)
 
     for lag_hours, model_name, seed_off in (
         (24, "seasonal_naive_24h", 1007),
@@ -888,25 +889,26 @@ def generate_per_item_forecasts(
         if len(residuals) >= 16:
             res_bank = np.asarray(residuals, dtype=np.float64)
             choice = rng.integers(len(res_bank), size=(n_orig, draws))
-            out[model_name] = point_seas[:, None, :] + res_bank[choice]
+            yield model_name, point_seas[:, None, :] + res_bank[choice]
         else:
             shocks = np.cumsum(rng.normal(scale=scale_std, size=(n_orig, draws, HORIZON)), axis=-1)
-            out[model_name] = point_seas[:, None, :] + shocks
+            yield model_name, point_seas[:, None, :] + shocks
 
     if "ewma_iid_gaussian" in models_to_run or "ewma_iid_student_t" in models_to_run:
         sigma_next, t_mult, t_df = _fit_ewma_iid(sub_log_price, sub_train_len, scale_std)
         sig_orig = sigma_next[sub_eval_origins][:, None, None]
         if "ewma_iid_gaussian" in models_to_run:
             rng = np.random.default_rng(seed + 1009)
-            out["ewma_iid_gaussian"] = np.cumsum(
-                rng.normal(size=(n_orig, draws, HORIZON)) * sig_orig, axis=-1
+            yield (
+                "ewma_iid_gaussian",
+                np.cumsum(rng.normal(size=(n_orig, draws, HORIZON)) * sig_orig, axis=-1),
             )
         if "ewma_iid_student_t" in models_to_run:
             rng = np.random.default_rng(seed + 1010)
             shocks = _unit_variance_student_t(rng, t_df, (n_orig, draws, HORIZON)) * (
                 sig_orig * t_mult
             )
-            out["ewma_iid_student_t"] = np.cumsum(shocks, axis=-1)
+            yield "ewma_iid_student_t", np.cumsum(shocks, axis=-1)
 
     if "ets_ses_gaussian" in models_to_run:
         rng = np.random.default_rng(seed + 1011)
@@ -917,7 +919,7 @@ def generate_per_item_forecasts(
         l0 = lvl_diff + rng.normal(size=(n_orig, draws)) * p_std
         rw = np.cumsum(rng.normal(scale=s_lvl, size=(n_orig, draws, HORIZON)), axis=-1)
         obs = rng.normal(scale=s_obs, size=(n_orig, draws, HORIZON))
-        out["ets_ses_gaussian"] = l0[:, :, None] + rw + obs
+        yield "ets_ses_gaussian", l0[:, :, None] + rw + obs
 
     if "ets_ses_student_t" in models_to_run or "ets_ewma_student_t" in models_to_run:
         s_lvl_t, s_obs_t, df_t = _fit_local_level_student_t(
@@ -936,7 +938,7 @@ def generate_per_item_forecasts(
                 _unit_variance_student_t(rng, df_t, (n_orig, draws, HORIZON)) * s_lvl_t, axis=-1
             )
             obs = _unit_variance_student_t(rng, df_t, (n_orig, draws, HORIZON)) * s_obs_t
-            out["ets_ses_student_t"] = l0[:, :, None] + rw + obs
+            yield "ets_ses_student_t", l0[:, :, None] + rw + obs
 
         if "ets_ewma_student_t" in models_to_run:
             rng = np.random.default_rng(seed + 1013)
@@ -953,7 +955,7 @@ def generate_per_item_forecasts(
             obs = _unit_variance_student_t(rng, df_ewma, (n_orig, draws, HORIZON)) * (
                 s_obs_t * g[:, :, None]
             )
-            out["ets_ewma_student_t"] = l0[:, :, None] + rw + obs
+            yield "ets_ewma_student_t", l0[:, :, None] + rw + obs
 
     if "ets_damped_gaussian" in models_to_run:
         rng = np.random.default_rng(seed + 1014)
@@ -981,40 +983,70 @@ def generate_per_item_forecasts(
             states[:, :, 0] = next_l
             states[:, :, 1] = next_b
             paths[:, :, h] = next_l + rng.normal(scale=s_obs, size=(n_orig, draws)) - y_base
-        out["ets_damped_gaussian"] = paths
+        yield "ets_damped_gaussian", paths
 
     if "arima_aicc_gaussian" in models_to_run:
         rng = np.random.default_rng(seed + 1015)
         paths, _ = _simulate_arima_aicc(sub_log_price, sub_train_len, sub_eval_origins, draws, rng)
-        out["arima_aicc_gaussian"] = paths
+        yield "arima_aicc_gaussian", paths
 
     if "ma1_garch11_gaussian" in models_to_run:
         rng = np.random.default_rng(seed + 1016)
-        out["ma1_garch11_gaussian"] = _simulate_ma1_garch11(
-            sub_log_price,
-            sub_returns,
-            sub_train_len,
-            sub_eval_origins,
-            draws,
-            "gaussian",
-            scale_std,
-            rng,
+        yield (
+            "ma1_garch11_gaussian",
+            _simulate_ma1_garch11(
+                sub_log_price,
+                sub_returns,
+                sub_train_len,
+                sub_eval_origins,
+                draws,
+                "gaussian",
+                scale_std,
+                rng,
+            ),
         )
 
     if "ma1_garch11_student_t" in models_to_run:
         rng = np.random.default_rng(seed + 1017)
-        out["ma1_garch11_student_t"] = _simulate_ma1_garch11(
-            sub_log_price,
-            sub_returns,
-            sub_train_len,
-            sub_eval_origins,
-            draws,
-            "student_t",
-            scale_std,
-            rng,
+        yield (
+            "ma1_garch11_student_t",
+            _simulate_ma1_garch11(
+                sub_log_price,
+                sub_returns,
+                sub_train_len,
+                sub_eval_origins,
+                draws,
+                "student_t",
+                scale_std,
+                rng,
+            ),
         )
 
-    return out
+
+def generate_per_item_forecasts(
+    panel,
+    item_idx: int,
+    train_start: int,
+    validation_start: int,
+    eval_origins: np.ndarray,
+    draws: int,
+    seed: int,
+    *,
+    models_to_run: tuple[str, ...] = PER_ITEM_BASELINES,
+) -> dict[str, np.ndarray]:
+    """Generate [B, M, H] cumulative log-return forecasts for one item strictly causally."""
+    return dict(
+        iter_per_item_forecasts(
+            panel,
+            item_idx,
+            train_start,
+            validation_start,
+            eval_origins,
+            draws,
+            seed,
+            models_to_run=models_to_run,
+        )
+    )
 
 
 def build_causal_tabular_features(panel, train_start: int, validation_start: int) -> np.ndarray:
@@ -1467,13 +1499,11 @@ def score_item_forecasts(
     }
 
     if n_comp > 0:
-        actual_comp = np.empty((n_comp, HORIZON), dtype=np.float64)
         base_prices = price_item[comp_origins]
-        for b, orig in enumerate(comp_origins):
-            actual_comp[b] = log_price_item[orig + 1 : orig + HORIZON + 1] - log_price_item[orig]
-
-        scaled_samples = comp_samples / item_scale
-        scaled_actual = actual_comp / item_scale
+        actual_comp = (
+            log_price_item[comp_origins[:, None] + np.arange(1, HORIZON + 1)]
+            - log_price_item[comp_origins, None]
+        )
 
         crps_unscaled = sample_crps(comp_samples, actual_comp)
         crps_scaled = crps_unscaled / item_scale
@@ -1482,16 +1512,16 @@ def score_item_forecasts(
         )
         wis_scaled = intervals_unscaled["wis"] / item_scale
 
-        es_scaled = energy_score(scaled_samples, scaled_actual)
-        vs_plugin_scaled = variogram_score(scaled_samples, scaled_actual, estimator="plugin")
-        vs_unbiased_scaled = variogram_score(scaled_samples, scaled_actual, estimator="unbiased")
-
-        shuffled_scaled = shuffle_horizon_dependence(scaled_samples, seed=seed + 77)
-        vs_shuffled_unbiased = variogram_score(shuffled_scaled, scaled_actual, estimator="unbiased")
-
+        # Energy score and p=0.5 variogram score are positively homogeneous of degree 1.
         es_unscaled = energy_score(comp_samples, actual_comp)
-        vs_plugin_unscaled = variogram_score(comp_samples, actual_comp, estimator="plugin")
-        vs_unbiased_unscaled = variogram_score(comp_samples, actual_comp, estimator="unbiased")
+        es_scaled = es_unscaled / item_scale
+        vs_plugin_unscaled, vs_unbiased_unscaled = variogram_score_both(comp_samples, actual_comp)
+        vs_plugin_scaled = vs_plugin_unscaled / item_scale
+        vs_unbiased_scaled = vs_unbiased_unscaled / item_scale
+
+        shuffled_unscaled = shuffle_horizon_dependence(comp_samples, seed=seed + 77)
+        vs_shuffled_unbiased = variogram_score_both(shuffled_unscaled, actual_comp)[1] / item_scale
+        del shuffled_unscaled
 
         pits = pit_values(comp_samples, actual_comp)
         primary_per_origin = crps_scaled[:, [0, 3, 23]].mean(axis=1)
@@ -1640,7 +1670,11 @@ def _per_item_worker(args_tuple):
         models_to_run,
     ) = args_tuple
     origin_to_grid_pos = {int(o): idx for idx, o in enumerate(val_grid_origins)}
-    forecasts = generate_per_item_forecasts(
+    log_price_item = np.log(panel.prices[item_idx])
+    price_item = panel.prices[item_idx]
+    item_scale = float(panel.scale[item_idx])
+    scored = {}
+    for name, paths in iter_per_item_forecasts(
         panel,
         item_idx,
         train_start,
@@ -1649,12 +1683,7 @@ def _per_item_worker(args_tuple):
         draws,
         seed + item_idx * 31,
         models_to_run=models_to_run,
-    )
-    log_price_item = np.log(panel.prices[item_idx])
-    price_item = panel.prices[item_idx]
-    item_scale = float(panel.scale[item_idx])
-    scored = {}
-    for name, paths in forecasts.items():
+    ):
         scored[name] = score_item_forecasts(
             paths,
             log_price_item,
@@ -1666,6 +1695,7 @@ def _per_item_worker(args_tuple):
             complete_mask_eval,
             seed + item_idx * 31,
         )
+        del paths
     return item_idx, scored
 
 
