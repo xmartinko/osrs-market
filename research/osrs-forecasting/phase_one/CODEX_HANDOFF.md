@@ -1,5 +1,7 @@
 # CODEX PARALLEL EXECUTION BRIEF — `osrs-market`
 
+> **Execution & Review Status (`2026-11-01`):** Completed by Codex on isolated branch `devstash/codex/forward-server-tui-2026-11-01` at commit `891ed2ab732d5adfca96656e8f3ce5d2d6466356` (`22` files, `+2,274 / -352`, left unmerged/undeployed per operator instruction). See [`CODEX_BRANCH_REVIEW.md`](./CODEX_BRANCH_REVIEW.md) and Section 9 of [`P1_BACKTEST.md`](./P1_BACKTEST.md) for the independent code-review verdict.
+
 Paste this document directly into an autonomous Codex session. Follow every constraint literally. Another agent is actively running the Phase One `P1` economic backtest and updating `research/osrs-forecasting/phase_one/` and `ml/src/osrs_ml/probabilistic_*.py` in parallel.
 
 ---
