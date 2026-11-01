@@ -1,0 +1,28 @@
+# OSRS probabilistic forecasting — Phase Zero
+
+2026-11-01. Research and bounded discovery are complete. **No new model training or trading results.** Training and major implementation await review of the [Phase One proposal](11_phase_one_proposal.md) and [proposed experiment matrix](08_experiment_matrix.md).
+
+## Executive scientific assessment
+
+This is worth a small, falsifiable forecasting study. The archive occupies 48 GB on the VPS. An existing inventory reports about 941 million overlapping physical observations, including main-economy five-minute history back to 2021. Those counts are not independent samples and were not recounted here. Existing project documents report 213 corrected null tests; there is no established trading edge. See the [bounded data audit](01_data_archive_audit.md).
+
+1. **Data readiness:** potentially all six requested horizons, after source-specific resolution, identity and availability checks. The old mixed daily/hourly/change-event export cannot establish regular high-frequency observations. Duplicate/null rates in the broader archive, dated limits, ingestion latency and execution evidence remain unresolved.
+2. **Baselines:** persistence, empirical-innovation random walk, rolling drift/scale, seasonal naive, ETS/ARIMA and GARCH subsets, ridge, existing CatBoost, and small Gaussian/Student-t neural heads. Compare common information and targets using [proper scores](07_evaluation_methodology.md).
+3. **Gaussian priorities:** conditional return location/scale, then rank-four-plus-diagonal covariance over 24 future hourly increments. GP, sparse GP, mixtures and latent state approaches remain distinct alternatives. See the [Gaussian hierarchy](04_gaussian_models.md).
+4. **Flow priorities:** four conditional rational-quadratic spline coupling blocks, width 64, eight bins and a 24-hour path. Compare matched Gaussian, Student-t, copula and marginal-preserving shuffled paths. Defer CFM, TSFlow GP priors and irregular ProFITi variants until simpler experiments warrant them. See the [flow review](05_flow_models.md).
+5. **Statistical and economic significance:** chronological rolling validation, purged overlapping labels, complete item vectors in time-block bootstrap, three Holm-corrected claims and a newly locked prospective test. Score marginals and paths separately. Aggregate-price scenarios cannot verify fills or attainable profit. See [market economics](06_market_microstructure.md).
+6. **Compute:** RTX 5080 for primary training, RTX 3070 for independent replication after readiness checks, and bounded homeserver CPU work. WSL2 is installed and stopped; CUDA/PyTorch readiness is untested. CUDA 13 driver output does not establish GTX 1070 support. See [compute architecture](09_compute_architecture.md).
+7. **Budget:** 18 seeded trial pipelines, each containing three validation fits and one final refit: at most 72 individual fits, estimated 36–288 GPU-hours under an unmeasured assumption of 0.5–4 hours per fit. Validation gates should eliminate unsuccessful contenders early. Model memory target 2–8 GB, with 12 GB and 6 GB caps for the 5080 and 3070 respectively. Proposed initial artifact cap: 20 GB. A three-fit pilot must measure and revise these estimates.
+8. **Risks:** source overlap, bucket-index conversion, metadata/lifecycle leakage, the September 30 coverage/precision and GE rule changes, limited independent regimes, holdout reuse, miscalibrated tails, model selection and unidentified execution. See the [risk register](10_research_risks.md).
+9. **Smallest Phase One:** 100 training-selected items, hourly observations, a 24-hour forecast path and 168-hour context. Compare baselines, diagonal/structured Gaussian and a small spline flow. Use three past validation folds and a proposed future 56-day test after manifest lock. Preserve the existing reserved holdout starting at Unix 1785024300.
+10. **Go/no-go:** at least 2% primary CRPS improvement with adjusted evidence and calibration. A separate joint-dependence claim needs at least 5% variogram improvement without more than 1% marginal degradation. Wide intervals are inconclusive. Do not extend tests until significant. Stop complexity escalation if baselines match it; unidentified fills prevent real-execution claims.
+
+## Reports and evidence
+
+The [charter](00_research_charter.md) defines evidence labels and scope; [problem formulation](02_problem_formulation.md) defines observable estimands. The [literature review](03_literature_review.md) and [bibliography](references/bibliography.md) link primary sources.
+
+The [seven work packages and execution ledger](agent_reports/README.md) document actual execution: three native Codex workers covered five functions; two actual DeepSeek reviews supplied independent forensic and adversarial critique. DeepSeek had no tools and did not independently browse its sources. The [principal adjudication](12_review_adjudication.md) preserves disagreements and rejects several erroneous reviewer claims.
+
+The numeric settings in document 08 govern this proposal. Independent reports preserve their original recommendations for provenance. This workspace contains documentation only. Source archives, collectors, services, software and production code were unchanged.
+
+Devstash: `martinko/osrs-market`, branch `research/osrs-phase-zero-2026-11-01`. Local copy: `C:/Users/xmart/osrs-phase-zero/research/osrs-forecasting/`. The research branch starts from the published devstash `ml/financial-model` history, excluding local binary-probe commits. Repository observations in the audit refer to the separately inspected VPS working tree.

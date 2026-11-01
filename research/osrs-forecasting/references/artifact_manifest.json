@@ -1,0 +1,151 @@
+{
+  "generated_at_utc": "2026-11-01T07:31:24.818786+00:00",
+  "scope": "Phase Zero documentation and research-review metadata only; self excluded",
+  "files": [
+    {
+      "path": "00_research_charter.md",
+      "bytes": 2089,
+      "sha256": "0ae27a35b7b51c5ce52fdc49392776175c05b5321fa808f83d89818e45da3200"
+    },
+    {
+      "path": "01_data_archive_audit.md",
+      "bytes": 11438,
+      "sha256": "6d7956acbe736bc6f1058374fcd898c08a70a52268a3fb4d841c250880dfad43"
+    },
+    {
+      "path": "02_problem_formulation.md",
+      "bytes": 3854,
+      "sha256": "1921418b2a91882e4be56cd1a173019e6b90742bbae04a4e57cf64893299d5f6"
+    },
+    {
+      "path": "03_literature_review.md",
+      "bytes": 5246,
+      "sha256": "0e22ac6eb6138fb82065e69cad0386b3e60e268cf914cf1e4cefaf6bb5ef400f"
+    },
+    {
+      "path": "04_gaussian_models.md",
+      "bytes": 9856,
+      "sha256": "b231a52d954337314f59b4dc68d6e066c705e125ce75b731b1ccecd0d431c688"
+    },
+    {
+      "path": "05_flow_models.md",
+      "bytes": 11040,
+      "sha256": "cf0e369828167632f6b01c225829a333dbda2e524ca1b7af32fe8877490cbf66"
+    },
+    {
+      "path": "06_market_microstructure.md",
+      "bytes": 7202,
+      "sha256": "df7845d224f4a656089d526671cd1df65e572a13995c68280c3ca71883eb3863"
+    },
+    {
+      "path": "07_evaluation_methodology.md",
+      "bytes": 10512,
+      "sha256": "dab7f276e146f3672793106e2459acbca935dad45dc8b1ad869388ed3136aa5f"
+    },
+    {
+      "path": "08_experiment_matrix.md",
+      "bytes": 11340,
+      "sha256": "cf1299f2485b8d487b0fd266811479e21092fc646c5d589d1256397cfda66d8a"
+    },
+    {
+      "path": "09_compute_architecture.md",
+      "bytes": 10635,
+      "sha256": "5b9f54eba590843eaad6127e2acd6b5a34118a640a21dbf9b4acbe43373cc43b"
+    },
+    {
+      "path": "10_research_risks.md",
+      "bytes": 3747,
+      "sha256": "ffa4311c6e5f1ca3671822acf643b2582d427638c3d46e9742aef6bbfd37aae6"
+    },
+    {
+      "path": "11_phase_one_proposal.md",
+      "bytes": 7040,
+      "sha256": "d21067a9eb1a16ca95fc21c71f90a18b0f51b30a89026ee54acfef22d6cab4b3"
+    },
+    {
+      "path": "12_review_adjudication.md",
+      "bytes": 5100,
+      "sha256": "865c153bde6fe46481574539c5dec316863afb227c9c54f0877cbc822eb47150"
+    },
+    {
+      "path": "agent_reports/adversarial_review.md",
+      "bytes": 5333,
+      "sha256": "7269b9c159a15cacb3e4427ecbdde9e397fff34c2dec66b8829cbf4c67ce345a"
+    },
+    {
+      "path": "agent_reports/adversarial_review.prompt.md",
+      "bytes": 2518,
+      "sha256": "f020e3a0e5e7d3130f2726f03231dd21a8be44287b6943be58e39819cf1dea91"
+    },
+    {
+      "path": "agent_reports/adversarial_review.retry.execution.json",
+      "bytes": 815,
+      "sha256": "21175ddbeeee646bfffcb1a331d883823d82d2248d94c567a3c0ff0766265aab"
+    },
+    {
+      "path": "agent_reports/compute.md",
+      "bytes": 4433,
+      "sha256": "9e509386d9c30b0f43d88d977a0cbc7e4bef9831a4715e36426f02a27c6aa49b"
+    },
+    {
+      "path": "agent_reports/data_forensics.execution.json",
+      "bytes": 810,
+      "sha256": "1625437bd7aa756e12e7fdd1bf1c3b5437618b879e72c3b68c4c3a883219067b"
+    },
+    {
+      "path": "agent_reports/data_forensics.md",
+      "bytes": 6315,
+      "sha256": "7eb10cae27d5ccca3b5f282f7cf0fba673cd27bb1d1b17d6b3e1d62701b571a5"
+    },
+    {
+      "path": "agent_reports/data_forensics.prompt.md",
+      "bytes": 2508,
+      "sha256": "f3d456522e7dd7384575048e0e32c4f666e9a1881bdaa31769dd6fdbdac191f4"
+    },
+    {
+      "path": "agent_reports/data_forensics.retry.execution.json",
+      "bytes": 810,
+      "sha256": "65190c4cbe590cb113abfe51184e727dea6e4c4dae35fda90a680ef597868e49"
+    },
+    {
+      "path": "agent_reports/economics.md",
+      "bytes": 3102,
+      "sha256": "451af1c053ed29c0065818e9fb9317a4e379d731d231710a1dbe6a36bbcc44ab"
+    },
+    {
+      "path": "agent_reports/evaluation.md",
+      "bytes": 2939,
+      "sha256": "11a367a620551dea0b452dee24d5b8dabc2d3842f86739eaa122257edcdebf81"
+    },
+    {
+      "path": "agent_reports/flow_models.md",
+      "bytes": 3214,
+      "sha256": "7b139aee9fc1bc9bc6cc02b886bd2bf960ffbe4613fec77a0c2efdae5a6686f5"
+    },
+    {
+      "path": "agent_reports/gaussian_models.md",
+      "bytes": 3535,
+      "sha256": "ee98d704101ca1238bd9a45c030d715d1aef4b84bc3538ffb982b59185f19bf6"
+    },
+    {
+      "path": "agent_reports/README.md",
+      "bytes": 6318,
+      "sha256": "54eadfb504dfa779d872005784721c08067a2592ed7bb833af743ab3c3b89266"
+    },
+    {
+      "path": "README.md",
+      "bytes": 5627,
+      "sha256": "c9c2beb768857c03316fe6d74d0ceecd87c82b4f14ba709a70a01c77362a8e0d"
+    },
+    {
+      "path": "references/bibliography.md",
+      "bytes": 6130,
+      "sha256": "b8f898a8d0336dbc826e152d907c68674ff1f41f6a18c411f8fc87c75f7080be"
+    },
+    {
+      "path": "references/reconnaissance_record.md",
+      "bytes": 3652,
+      "sha256": "b6af8e64a047b5a4816af6446ed9e2269bd903b21fa3e9259d7b2f8b6918e4d0"
+    }
+  ]
+}

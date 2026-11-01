@@ -1,0 +1,35 @@
+# Phase One proposal — approval required before execution
+
+Scientific assessment: worthwhile as a bounded **aggregate probabilistic forecasting** study, with no established trading edge. Existing long high-frequency history makes the question feasible; source harmonization and honest confirmation are more pressing than model expressiveness. Compute is adequate for small independent models. Heterogeneous distributed training and a giant joint generator across all items are not justified currently.
+
+## Smallest informative campaign
+
+1. Freeze a source-qualified, development-only hourly panel of up to 100 items after E0 checks. Use existing acquisition/adapters without archive mutation. Resolve overlaps, means weighted by disjoint side volumes, availability and historical eligibility. Stop before training if these cannot be resolved. Use the original mixed export only to reproduce old research, not to claim regularity.
+2. Establish persistence, empirical random walk, seasonal, Gaussian/Student-t volatility, ridge and existing CatBoost controls. Fit ARIMA, ETS and GARCH to a small representative subset. Separate mean prediction from scale skill. The prior 213-test null is a caution, not a forecasting theorem.
+3. Compare diagonal Gaussian, rank-4-plus-diagonal trajectory Gaussian, shared Student-t, small spline flow, and recursive/independent-horizon controls with common inputs and fixed compute. Use 18 seeded trial pipelines, each with three validation-fold fits plus one final refit: up to 72 fits, including any substituted numerical rescues. Score generative outputs rather than judging visual appeal.
+4. Fix the selection rule and forecast/policy settings on three chronological development folds before prospective registration. Preserve the old reserved holdout. Commit manifests, configuration, seeds, code/dependency/source hashes and the new 56-day final period before it begins. Confirm once after final label maturity.
+5. Evaluate C1 (Gaussian), C2 (dependence) and C3 (flow) using the matrix's practical-size, adjusted-uncertainty, calibration and tail gates. An inconclusive result does not justify more architectures. Economic scenario results remain separately labelled and may be unidentified despite predictive skill.
+
+Start Gaussian research with conditional return location/scale, then low-rank covariance. Exact GPs are limited to small per-item studies; sparse GPs, mixtures and state-space models have distinct assumptions. Start flow research with four conditional rational-quadratic spline coupling blocks, width 64, eight bins and H = 24. Defer conditional flow matching, TSFlow with a GP prior and irregular ProFITi variants until the simpler comparison warrants them. Published nonfinancial benchmarks do not establish OSRS performance.
+
+## Resources and cost — planning estimates, not benchmarks
+
+Use the primary RTX 5080 through WSL2 after a future smoke test. RTX 3070 independent replication requires readiness/driver validation and either substitution within the fit/time cap or separate approval. Use the homeserver for bounded CPU quality/baseline jobs, preserving media services and k3s. The VPS coordinates small metadata only; no new service is needed. Stage immutable hashed subsets locally. Distributed GPU memory is not a shared 32 GB pool.
+
+For 100 items × 365 days × 24 hourly origins, the panel has about 876,000 item-hours before missingness. Index or lazily construct 168-step windows. Assuming 1–10 million parameters and batches of 32–128, target 2–8 GB allocated memory for small Gaussian/spline configurations, with a 12 GB RTX 5080 cap and a 6 GB RTX 3070 target to leave headroom. These estimates are unverified. Pilot measurements must include peak memory, examples per second and wall time; ODE sampling costs belong to a later flow-matching stage.
+
+The full design has **18 seeded trial pipelines × four fits = 72 fits**. Assuming 0.5–4 hours per fit gives **36–288 GPU-hours**, plus at most 12 CPU-hours for baselines and four CPU-hours for diagnostics. This is a conditional ceiling; start with **three individual smoke/pilot fits**, then review measured cost before continuation. Stop weaker contenders using the frozen validation rule, which may reduce the final-refit count. All numerical rescues consume fit slots and time. Independent-node replication must substitute within the approved limits or receive separate approval. Measure and account for orchestration, inference and search overhead; these are not assumed free. These are planning limits, not a completion-time promise.
+
+Preserve the 48 GB archive in place. A local qualified subset may occupy 0.1–5 GB, depending on columns and time span. Initially cap checkpoints/configurations/metrics at 5 GB and total research artifacts at 20 GB. Stream path scoring and retain a deterministic sample subset. Full ensembles may reach tens of GB per model (see `09_compute_architecture.md`); do not store every Monte Carlo sample. Measure energy directly if supported; otherwise report GPU power telemetry and runtime as proxies, without unsupported energy or thermal claims.
+
+## Go / no-go
+
+**Data go:** attributable compatible windows, positive-price targets, deterministic deduplication, no unresolved timestamp/overflow errors in admitted data, no known as-of leakage and defensible source rights. Failure pauses model claims. Fix completeness thresholds and IDs before inspecting model performance.
+
+**Predictive go:** at least 2% relative primary CRPS gain against the strongest calibrated baseline, with uncertainty supporting improvement under the three-claim Holm procedure. Report paired 95% intervals and explicit adjusted tests consistently with the matrix. Proposed calibration gate: nominal 90% coverage estimated within 87–93%, with dependence-aware uncertainty consistent with 90% and sufficiently precise to assess that tolerance. Require no material prespecified tail degradation.
+
+**Joint go:** at least 5% variogram-score improvement against the strongest dependence control, with adjusted evidence and no CRPS loss exceeding 1%. Significant but smaller effects are reportable and fail the complexity-budget gate. Wide intervals are inconclusive. Era, liquidity and latency checks must not explain the entire gain as a data artifact.
+
+**Flow no-go:** no practical advantage over low-rank Gaussian, Student-t or copula controls; unresolved numerical failures within budget; or worsening calibration. Keep conditional flow matching deferred. Stop or redirect if honest tests show baseline parity or source/latency integrity is inadequate. Executability remains unverified without observations supporting fills; conditional simulations do not guarantee attainable profits.
+
+Approval would authorize only the bounded Phase One campaign after exact manifests and source checks are reviewable. Live execution, game automation, new-source scraping, infrastructure provisioning, BIOS changes/reboots, dataset rewrites and production deployment require their own authorization.

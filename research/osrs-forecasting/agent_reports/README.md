@@ -1,0 +1,31 @@
+# Research work packages and execution ledger
+
+Seven scientific functions were assigned with bounded responsibilities. Three native Codex workers covered five functions; two tool-free DeepSeek reviews covered the remaining functions. No model response substitutes for a verified source or diagnostic.
+
+| Function | Actual executor and status | Boundary |
+|---|---|---|
+| 1. Data forensics | Principal reconnaissance plus completed DeepSeek review | Source semantics, lineage, validity gates; no acquisition |
+| 2. Gaussian models | Native Codex gaussian_flows, completed | Gaussian hierarchy, assumptions and costs |
+| 3. Flow models | Same native worker, separate completed report | Likelihood versus sampling, TSFlow and ProFITi |
+| 4. Evaluation | Native Codex evaluation_economics, completed | Scores, temporal validation, dependence and multiplicity |
+| 5. Economics | Same native worker, separate completed report | Dated tax rules, limits and fill identifiability |
+| 6. Compute | Native Codex compute, completed | Primary hardware/software documentation and proposed architecture |
+| 7. Adversarial review | Independent DeepSeek request, completed | Critique of the supplied candidate protocol; no browsing or data tools |
+
+The three native workers researched independently before their reports were synthesized. Functions 2/3 and 4/5 share workers; seven named functions therefore do not constitute seven independent replications. After their initial reports completed, two bounded DeepSeek requests ran concurrently. The principal checked sources and adjudicated disagreements.
+
+Both DeepSeek requests used the existing OpenRouter account and requested `~deepseek/deepseek-flash-latest`; the returned model was `deepseek/deepseek-v4.1-flash-1017`. They had no tools and reviewed supplied evidence only. First attempts exhausted 3,500 output tokens in reasoning, returning a nine-character forensic fragment and no adversarial answer; neither was usable research. One retry, with reasoning disabled and an 8,000-token maximum, returned both complete reports. The saved prompt files and retry execution JSON record actual inputs, model identity and usage. The first forensic execution record is retained; no complete response/usage record was retained for the empty first adversarial attempt. No failed attempt is represented as a completed report.
+
+The raw seven reports preserve their original recommendations, including mistakes. See [principal adjudication](../12_review_adjudication.md) for corrections. The final proposed numeric protocol is in [the experiment matrix](../08_experiment_matrix.md), including the corrected 72-fit upper budget. Independent reviewers saw an earlier candidate design.
+
+## Ready-to-run task packets
+
+Common instruction for every packet: Phase Zero only. Read only assigned evidence and preserve the original-export holdout starting at Unix 1785024300. No training, installation, secrets, messaging, acquisition, trading or dataset changes. Distinguish observed facts, prior reported results, published findings, deductions, hypotheses and unknowns. Produce ten sections: scope; findings; mathematical/empirical justification; direct primary citations; assumptions; limitations; competing approaches; falsifiable experiments; implementation/compute complexity; recommendation with confidence. Cite only sources actually consulted; label unverified leads. Return at most 2,000 words and unresolved questions, writing only the assigned report. Use at most three concurrent workers plus the coordinator. Research before seeing other workers' conclusions.
+
+1. **Data forensics:** inspect the archive audit and source manifests plus explicitly permitted development-only samples. Establish field meanings, resolution, timestamps, duplicates, lifecycle, zero versus missing volume, staleness, September 30 coverage/precision changes and availability. Deliver admission rules and observational impossibility results. Do not generalize a sample error rate to the archive. Do not scan sealed rows for before/after comparisons.
+2. **Gaussian models:** distinguish conditional Gaussian likelihoods, full and low-rank trajectory covariance, GP/sparse GP, mixtures, latent state models and copulas. Rank suitability, assumptions and computational complexity. Read GPML, Titsias, DeepAR and the Gaussian copula paper. Propose falsifiable comparisons against empirical and Student-t controls.
+3. **Flow models:** compare MAF, spline flows, continuous flows, flow matching, conditional/transport matching, latent models and GP priors. Read TSFlow 2410.03024 and ProFITi DOI 10.1609/aaai.v39i20.35494. Distinguish exact likelihood from sample-based evaluation and query-set consistency. Propose a small architecture and equal-budget ablations for 8–16 GB GPUs; do not transfer published benchmark gains to OSRS.
+4. **Evaluation:** define estimands and comparable proper scores, chronological purges, complete-cross-section block bootstrap, multiplicity, Monte Carlo uncertainty, tail-event power and a locked prospective test. Compare independent horizons and joint forecasts using marginal-preserving controls. Separate stochastic seeds from independent market histories.
+5. **Economics:** verify dated Jagex tax rules, exemptions, cap, offer-creation cohorts, purchase limits and slots. Distinguish aggressive/passive assumptions and aggregate references from quotes. Define forecast accuracy, gross opportunity, after-tax opportunity, scenario simulation and real executability separately. Specify a fixed hypothetical ledger and uncertainty bounds; no fabricated fills or live execution.
+6. **Compute:** consult current primary CUDA/PyTorch/WSL documentation. Distinguish driver support from compiled kernels; assess independent scheduling versus DDP, local caches, precision, checkpoint portability, RAM/VRAM and thermals. Give conditional estimates and later acceptance tests, not invented benchmarks. Preserve all existing services and settings.
+7. **Adversarial review:** independently challenge leakage, pseudo-replication, the prior null, overfitting, limited regimes, calibration, economic identifiability and optional stopping. Give explicit falsifications, no-go criteria and competing explanations. Preserve disagreement; no presumption that the proposed model should succeed.

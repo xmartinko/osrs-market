@@ -1,0 +1,15 @@
+# Agent 5 — market economics and strategy feasibility
+
+Researcher: native Codex subagent, not DeepSeek. Date: 2026-11-01. Scope: dated GE rules, observability and research-only decision evaluation. Full evidence and scenario design: [market microstructure](../06_market_microstructure.md). No live trading or game-account automation occurred.
+
+Verified findings and citations: [Jagex's initial tax rule](https://secure.runescape.com/m=news/grand-exchange-tax--item-sink?oldschool=1); [2025 rate/exemption change](https://secure.runescape.com/m=news/yama-cas--more?oldschool=1); [2026 GE changes](https://secure.runescape.com/m=news/ge-improvements-beyond-max-cash?oldschool=1); [publisher feed semantics](https://oldschool.runescape.wiki/w/RuneScape%3AReal-time_Prices). Distinguish publisher statements and dated Jagex rules from user-experience descriptions in Wiki mechanics pages.
+
+Mathematical deduction: net per-unit opportunity is exit minus per-unit tax minus entry minus assumed costs; tax rounding and caps make fixed percentage approximations wrong near boundaries. Missing historical offer cohorts require transition uncertainty. Tax-free status and buy limits must be effective-dated by item ID; current metadata cannot establish old restrictions.
+
+Key hypothesis: calibrated uncertainty improves a frozen risk-constrained paper policy relative to point forecasts using the same features and policy search budget. Null: no robust tax/cost-adjusted advantage. Experiment: compare forecast families under identical balance, slot, inventory, purchase-limit and exposure ledgers, with delayed aggressive-price proxies and several passive fill scenarios. Use a no-trade policy and empirical-distribution policy as alternatives. Count capital-days and stranded inventory, not just completed profitable exits.
+
+Theoretical limitation: observed averages do not identify the price/quantity at which a hypothetical order would execute; passive limit crossing does not identify queue priority. Consequently the archive can support scenario outcomes, not a proof of attainable profit. Zero-fill scenarios belong in uncertainty bounds. Relative volume participation caps are assumptions, particularly across coverage regimes, rather than empirically established capacity.
+
+Adversarial falsification: if all apparent opportunity disappears under one additional completed-bar delay, or only optimistic fills remain profitable, reject economic usefulness while retaining any valid predictive finding. A reporting-coverage break coincides with changes to GE mechanics, so before/after differences lack a clean causal interpretation.
+
+Implementation complexity estimate: moderate for an event-driven hypothetical ledger and dated rule tables; high for validated execution without authorized fill records. Simulation is CPU work and does not justify GPU allocation. Runtime is unmeasured. Recommendation: permit economic scenarios only after data timing and forecast calibration gates pass. High confidence in separation of claims; low confidence that public aggregates establish real-world executability.
