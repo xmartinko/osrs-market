@@ -1,5 +1,7 @@
 import hashlib
 import json
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import numpy as np
 import pandas as pd
@@ -13,6 +15,7 @@ from osrs_ml.probabilistic_train import (
     TRAIN_START,
     VALIDATION_START,
     bounded_subset,
+    configure_device,
     eligible_origins,
     load_verified_panel,
     prepare_arrays,
@@ -116,3 +119,34 @@ def test_bounded_subsets_are_deterministic_unique_and_do_not_change_values():
     np.testing.assert_array_equal(first, second)
     assert len(first) == len(np.unique(first[:, 1])) == 20
     assert set(map(tuple, first)) <= set(map(tuple, origins))
+
+
+def test_bare_cuda_resolves_current_index_before_memory_apis():
+    # PyTorch memory APIs require an explicit device index even when model.to
+    # accepts bare "cuda". Use a nonzero current GPU to catch hard-coded cuda:0.
+    def device_factory(value, index=None):
+        parts = value.split(":")
+        return SimpleNamespace(type=parts[0], index=(int(parts[1]) if len(parts) == 2 else index))
+
+    observed = []
+
+    def memory_fraction(fraction, device):
+        assert device.index is not None
+        observed.append((fraction, device.index))
+
+    def peak_reset(device):
+        assert device.index is not None
+
+    cuda = SimpleNamespace(is_available=lambda: True, current_device=Mock(return_value=2),
+                           set_per_process_memory_fraction=memory_fraction,
+                           reset_peak_memory_stats=peak_reset)
+    torch = SimpleNamespace(device=device_factory, cuda=cuda)
+    assert configure_device(torch, "cuda").index == 2
+    assert configure_device(torch, "cuda:1").index == 1
+    assert observed == [(0.75, 2), (0.75, 1)]
+    cuda.current_device.assert_called_once()
+    assert configure_device(torch, "cpu").type == "cpu"
+    assert len(observed) == 2
+    cuda.is_available = lambda: False
+    with pytest.raises(ValueError, match="no silent CPU fallback"):
+        configure_device(torch, "cuda")

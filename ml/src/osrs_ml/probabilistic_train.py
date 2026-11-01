@@ -240,6 +240,19 @@ def _json(path, value):
     temporary.replace(path)
 
 
+def configure_device(torch, requested):
+    """Resolve bare CUDA to the current explicit index before CUDA memory APIs."""
+    device = torch.device(requested)
+    if device.type == "cuda":
+        if not torch.cuda.is_available():
+            raise ValueError("Requested CUDA device is unavailable; no silent CPU fallback")
+        if device.index is None:
+            device = torch.device("cuda", torch.cuda.current_device())
+        torch.cuda.set_per_process_memory_fraction(0.75, device)
+        torch.cuda.reset_peak_memory_stats(device)
+    return device
+
+
 def _summarize(samples, targets):
     # Both arguments are already cumulative, unscaled log returns.
     marginal = sample_crps(samples, targets)
@@ -307,13 +320,9 @@ def _run_pilot(args, output, started, status):
     del frame
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
-    if args.device.startswith("cuda") and not torch.cuda.is_available():
-        raise ValueError("Requested CUDA device is unavailable; no silent CPU fallback")
-    device = torch.device(args.device)
+    device = configure_device(torch, args.device)
     if device.type == "cuda":
-        torch.cuda.set_per_process_memory_fraction(0.75, device)
         torch.cuda.manual_seed_all(args.seed)
-        torch.cuda.reset_peak_memory_stats(device)
     torch.use_deterministic_algorithms(True)
     torch.backends.cudnn.benchmark = False
     torch.backends.cuda.matmul.allow_tf32 = False

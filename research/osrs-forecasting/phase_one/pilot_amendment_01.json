@@ -1,0 +1,26 @@
+{
+  "recorded_at_utc": "2026-11-01T07:53:29.439924+00:00",
+  "reason": "Both initial pilot attempts failed before optimizer initialization because an unindexed torch.device(cuda) was rejected by the memory-fraction API. This is an implementation/device-selection failure, not a model result.",
+  "failed_attempts": [
+    {
+      "id": "p01_diag_3070",
+      "optimizer_steps": 0,
+      "error": "CUDA memory-fraction API requires explicit device index"
+    },
+    {
+      "id": "p02_lowrank_5080",
+      "optimizer_steps": 0,
+      "error": "CUDA memory-fraction API requires explicit device index"
+    }
+  ],
+  "budget": "Both attempts consume slots in the72maximum fit budget. Next two corrected attempts are3and4; review measured resource cost after them before deciding whether to execute spline attempt5. No full-campaign automatic launch.",
+  "retry_ids": [
+    "p01_diag_3070_r1",
+    "p02_lowrank_5080_r1"
+  ],
+  "retry_device": "cuda:0",
+  "scientific_settings_changed": false,
+  "previous_failures_retained": true,
+  "outcome_tuning": false,
+  "authorization_basis": "User approved bounded PhaseOne; routine implementation recovery, without changing data, model, target, score or training-step limits."
+}
