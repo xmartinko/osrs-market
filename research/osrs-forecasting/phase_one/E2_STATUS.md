@@ -29,9 +29,15 @@ Every neural candidate is scored on the **exact identical 3-fold `complete_24h` 
 
 ---
 
-## 3. Current Execution State & Active Queues
+## 3. Current Execution State, Authoritative Tree Topology & Active Queues
 
-- **Current phase:** Verifying unit tests (`pytest` + `ruff`) and synthetic zero-market-data GPU smoke checks, committing frozen `e2_e4_campaign_protocol.json` + `probabilistic_campaign.py` to `devstash`, then dispatching concurrent GPU queues:
+- **Authoritative Git source tree:** `C:/Users/xmart/osrs-phase-one` (all code/protocol/status edits are authored, linted, unit-tested, and committed here).
+- **Synchronized Linux GPU execution checkouts (verified via Git commit + `sha256sum` prior to queue launch):**
+  - Desktop WSL2 (RTX 5080): `/home/xmart/osrs-research/code`
+  - ThinkPad (RTX 3070 Laptop GPU): `/home/martin/osrs-research/code`
+  - VPS archive/relay worktree: `/home/martin/osrs-phase-one-worktree`
+  - Every fit records `code_commit`, `git_dirty` (`false` enforced by `run_node_queue`), `code_tree`, `authoritative_git_tree`, and `source_module_sha256` inside both `status.json` and `metadata.json`.
+- **Current phase:** Verifying `pytest` + `ruff`, syncing committed HEAD across Windows -> VPS/`devstash` -> WSL -> ThinkPad, verifying byte-for-byte `sha256sum` across all trees, running zero-market-data synthetic CUDA smoke checks, and dispatching concurrent GPU queues:
   - **Queue `rtx5080_e2` (Desktop WSL2 RTX 5080, 27 fits):**
     - `spline_flow` (`campaign_v3` cumulative affine + Cholesky correlation + 4 RQ-spline coupling blocks + learnable Student-$t$ base): seeds `11, 23, 47` × folds `1, 2, 3` (`9` fits)
     - `recursive_student_t` (closed-loop 1-step autoregressive Student-$t$ rollout): seeds `11, 23, 47` × folds `1, 2, 3` (`9` fits)

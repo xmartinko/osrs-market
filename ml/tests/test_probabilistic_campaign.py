@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -212,6 +213,14 @@ def test_end_to_end_cpu_campaign_fit_and_gate_evaluator(tmp_path):
             score_threads=1,
         )
         assert st["status"] == "completed"
+        assert (
+            Path(st["code_tree"]) / "ml" / "src" / "osrs_ml" / "probabilistic_campaign.py"
+        ).is_file()
+        assert "probabilistic_models.py" in st["source_module_sha256"]
+        meta_doc = json.loads((runs_dir / spec["fit_id"] / "metadata.json").read_text())
+        assert meta_doc["code_tree"] == st["code_tree"]
+        assert meta_doc["authoritative_git_tree"] == "C:/Users/xmart/osrs-phase-one"
+        assert meta_doc["source_module_sha256"] == st["source_module_sha256"]
         with np.load(runs_dir / spec["fit_id"] / "loss_panel.npz") as lp:
             # Create synthetic E1 reference panel with identical NaN mask and worse loss.
             np.savez_compressed(

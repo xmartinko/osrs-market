@@ -83,6 +83,33 @@ E3_PRICE_ONLY_FEATURES = (
 )
 
 SUPPORTED_FEATURE_SETS = ("e2_matched", "campaign", "pilot_v1", "e3_price_only")
+AUTHORITATIVE_GIT_TREE = "C:/Users/xmart/osrs-phase-one"
+
+
+def _code_tree_provenance() -> dict:
+    """Capture executing code tree, git commit/dirty state, and source module SHA-256 hashes."""
+    src_dir = Path(__file__).resolve().parent
+    code_tree = str(src_dir.parents[2])
+    code_commit, git_dirty = _git_provenance()
+    module_hashes = {}
+    for mod_name in (
+        "probabilistic_campaign.py",
+        "probabilistic_models.py",
+        "probabilistic_train.py",
+        "probabilistic_evaluation.py",
+        "probabilistic_baselines.py",
+    ):
+        mod_path = src_dir / mod_name
+        if mod_path.is_file():
+            module_hashes[mod_name] = file_hash(mod_path)
+    return {
+        "code_commit": code_commit,
+        "git_dirty": git_dirty,
+        "code_tree": code_tree,
+        "module_dir": str(src_dir),
+        "authoritative_git_tree": AUTHORITATIVE_GIT_TREE,
+        "source_module_sha256": module_hashes,
+    }
 
 
 def build_campaign_panel(
@@ -393,6 +420,7 @@ def run_campaign_fit(
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=False)
     started = time.time()
+    prov = _code_tree_provenance()
     status = {
         "status": "running",
         "experiment_id": experiment_id,
@@ -409,6 +437,11 @@ def run_campaign_fit(
         "batch_size": batch_size,
         "lr": lr,
         "num_samples": num_samples,
+        "code_commit": prov["code_commit"],
+        "git_dirty": prov["git_dirty"],
+        "code_tree": prov["code_tree"],
+        "authoritative_git_tree": prov["authoritative_git_tree"],
+        "source_module_sha256": prov["source_module_sha256"],
     }
     _json(output / "status.json", status)
     try:
@@ -566,7 +599,7 @@ def _execute_campaign_fit(
         prog = (s - warmup_steps) / (max_steps - warmup_steps)
         return lr * (0.1 + 0.9 * 0.5 * (1.0 + math.cos(math.pi * min(prog, 1.0))))
 
-    code_commit, git_dirty = _git_provenance()
+    prov = _code_tree_provenance()
     package_freeze = sorted(
         f"{dist.metadata['Name']}=={dist.version}" for dist in importlib.metadata.distributions()
     )
@@ -585,8 +618,12 @@ def _execute_campaign_fit(
         "panel_sha256": manifest["sha256"],
         "panel_manifest_sha256": manifest_hash,
         "protocol_sha256": protocol_hash,
-        "code_commit": code_commit,
-        "git_dirty": git_dirty,
+        "code_commit": prov["code_commit"],
+        "git_dirty": prov["git_dirty"],
+        "code_tree": prov["code_tree"],
+        "module_dir": prov["module_dir"],
+        "authoritative_git_tree": prov["authoritative_git_tree"],
+        "source_module_sha256": prov["source_module_sha256"],
         "train_start": train_start,
         "validation_start": val_start,
         "validation_end_exclusive": val_end,
@@ -900,8 +937,16 @@ def run_node_queue(
     device_name: str = "cuda",
     torch_threads: int = 4,
     score_threads: int = 4,
+    require_clean_git: bool = True,
 ) -> dict:
     """Run all preregistered fits assigned to ``queue_name`` sequentially on one GPU."""
+    prov = _code_tree_provenance()
+    if require_clean_git and (
+        prov["code_commit"] == "unavailable" or prov["git_dirty"] is not False
+    ):
+        raise RuntimeError(
+            f"Refusing to launch campaign queue from dirty or untracked checkout: {prov}"
+        )
     protocol = json.loads(Path(protocol_path).read_text(encoding="utf-8"))
     queues = protocol["queues"]
     if queue_name not in queues:
@@ -965,6 +1010,11 @@ def run_node_queue(
                 "current_fit_id": fit_id,
                 "completed_or_processed": len(results),
                 "elapsed_seconds": time.time() - q_started,
+                "code_commit": prov["code_commit"],
+                "git_dirty": prov["git_dirty"],
+                "code_tree": prov["code_tree"],
+                "authoritative_git_tree": prov["authoritative_git_tree"],
+                "source_module_sha256": prov["source_module_sha256"],
             },
         )
         try:
@@ -1028,6 +1078,11 @@ def run_node_queue(
     final_q = {
         "queue_name": queue_name,
         "status": "completed",
+        "code_commit": prov["code_commit"],
+        "git_dirty": prov["git_dirty"],
+        "code_tree": prov["code_tree"],
+        "authoritative_git_tree": prov["authoritative_git_tree"],
+        "source_module_sha256": prov["source_module_sha256"],
         "total_fits": len(fit_specs),
         "succeeded": sum(1 for r in results if r.get("status") == "completed"),
         "failed": sum(1 for r in results if r.get("status") == "failed"),
@@ -1102,6 +1157,8 @@ def evaluate_campaign_gates(
                 incomplete_reasons.append(f"{fid}:not_found")
                 continue
             st = json.loads((rdir / "status.json").read_text(encoding="utf-8"))
+            meta_p = rdir / "metadata.json"
+            meta = json.loads(meta_p.read_text(encoding="utf-8")) if meta_p.is_file() else {}
             slot_records.append(
                 {
                     "fit_id": fid,
@@ -1109,6 +1166,9 @@ def evaluate_campaign_gates(
                     "fold": int(spec["fold"]),
                     "seed": int(spec["seed"]),
                     "status": st.get("status"),
+                    "code_commit": st.get("code_commit") or meta.get("code_commit"),
+                    "git_dirty": st.get("git_dirty", meta.get("git_dirty")),
+                    "code_tree": st.get("code_tree") or meta.get("code_tree"),
                     "elapsed_seconds": st.get("elapsed_seconds"),
                     "steps_completed": st.get("steps_completed"),
                     "best_step": st.get("best_step"),
@@ -1398,12 +1458,15 @@ def evaluate_campaign_gates(
             "bootstrap_var_diff_95ci": boot_var_map[cid]["difference_interval"],
         }
 
-    code_commit, git_dirty = _git_provenance()
+    eval_prov = _code_tree_provenance()
     report = {
         "experiment_id": experiment_filter,
         "evaluated_at_unix": time.time(),
-        "code_commit": code_commit,
-        "git_dirty": git_dirty,
+        "code_commit": eval_prov["code_commit"],
+        "git_dirty": eval_prov["git_dirty"],
+        "code_tree": eval_prov["code_tree"],
+        "authoritative_git_tree": eval_prov["authoritative_git_tree"],
+        "source_module_sha256": eval_prov["source_module_sha256"],
         "protected_holdout_start": HOLDOUT_START,
         "holdout_touched": False,
         "reference_baseline": {
