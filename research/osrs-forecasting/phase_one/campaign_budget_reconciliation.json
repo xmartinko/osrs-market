@@ -1,0 +1,86 @@
+{
+  "reconciled_at_utc": "2026-11-01T08:23:00+00:00",
+  "repository_branch": "research/osrs-phase-one-2026-11-01",
+  "base_commit_before_stage": "310b96f6d408b82296f9f030d519232be12c63e5",
+  "pilot_fit_code_commit": "bca7dfb3abaf9bdef351b482c9c1c9dc4afafbfb",
+  "panel_sha256": "5a5bf0fa4d656b24b4df5883804fbb32068e5c0262924c3d51ccffe93af321a8",
+  "protected_holdout_start": 1785024300,
+  "neural_fit_budget": {
+    "approved_maximum_fits": 72,
+    "consumed_pilot_attempts": 5,
+    "consumed_breakdown": [
+      {
+        "slot": 1,
+        "run_id": "p01_diag_3070",
+        "node": "thinkpad",
+        "gpu": "RTX3070Laptop",
+        "model": "gaussian_diag",
+        "code_commit": "98cebd8ee7589163d1ce436df512067039b84bc8",
+        "status": "failed_pre_optimization",
+        "reason": "PyTorch set_per_process_memory_fraction rejected bare 'cuda' without explicit device index; 0 optimizer steps."
+      },
+      {
+        "slot": 2,
+        "run_id": "p02_lowrank_5080",
+        "node": "desktop-wsl2",
+        "gpu": "RTX5080",
+        "model": "gaussian_lowrank",
+        "code_commit": "98cebd8ee7589163d1ce436df512067039b84bc8",
+        "status": "failed_pre_optimization",
+        "reason": "PyTorch set_per_process_memory_fraction rejected bare 'cuda' without explicit device index; 0 optimizer steps."
+      },
+      {
+        "slot": 3,
+        "run_id": "p02_lowrank_5080_r1",
+        "node": "desktop-wsl2",
+        "gpu": "RTX5080",
+        "model": "gaussian_lowrank",
+        "code_commit": "bca7dfb3abaf9bdef351b482c9c1c9dc4afafbfb",
+        "status": "completed_pilot",
+        "optimizer_steps": 256
+      },
+      {
+        "slot": 4,
+        "run_id": "p01_diag_3070_r1",
+        "node": "thinkpad",
+        "gpu": "RTX3070Laptop",
+        "model": "gaussian_diag",
+        "code_commit": "bca7dfb3abaf9bdef351b482c9c1c9dc4afafbfb",
+        "status": "completed_pilot",
+        "optimizer_steps": 256
+      },
+      {
+        "slot": 5,
+        "run_id": "p03_spline_5080",
+        "node": "desktop-wsl2",
+        "gpu": "RTX5080",
+        "model": "spline_flow",
+        "code_commit": "bca7dfb3abaf9bdef351b482c9c1c9dc4afafbfb",
+        "status": "completed_pilot",
+        "optimizer_steps": 256
+      }
+    ],
+    "consumed_e1_baseline_neural_slots": 0,
+    "remaining_neural_fit_slots": 67,
+    "reserved_future_campaign_plan": {
+      "status": "not_launched_pending_e1_baseline_results",
+      "max_validation_campaign_fits": 54,
+      "validation_campaign_structure": "Up to 6 pre-registered neural model/context configurations x 3 seeds x 3 chronological folds = 54 fits maximum.",
+      "max_validation_gated_prospective_refits": 9,
+      "prospective_refit_gate": "Up to 3 finalist configurations x 3 seeds = 9 fits ONLY if at least one neural family beats the strongest calibrated E1 baseline by >= 2.0% relative 3-fold item-macro scaled CRPS (and >= 5.0% relative unbiased variogram improvement for joint claims) with 90% coverage within [0.87, 0.93]; otherwise 0 refits.",
+      "unallocated_recovery_reserve": 4,
+      "sum_planned_plus_reserve": 67
+    }
+  },
+  "cpu_baseline_budget": {
+    "approved_cpu_hours": 12.0,
+    "stage": "E1 full chronological 3-fold baseline suite",
+    "max_worker_threads_desktop": 6,
+    "counts_against_neural_72_fit_cap": false
+  },
+  "governance_assertions": {
+    "sealed_holdout_untouched": true,
+    "prior_pilot_directories_preserved_immutable": true,
+    "no_automatic_gpu_campaign_launch": true
+  }
+}

@@ -1,0 +1,156 @@
+{
+  "registered_at_utc": "2026-11-01T08:23:30+00:00",
+  "experiment_id": "E1",
+  "stage": "Full chronological 3-fold development evaluation of statistical, state-space, volatility, and tabular quantile baselines",
+  "panel_sha256": "5a5bf0fa4d656b24b4df5883804fbb32068e5c0262924c3d51ccffe93af321a8",
+  "panel_manifest_sha256": "6b4f501c4bf54c33df386caf5f4e46679d9273bddaf3cb6dc6ed967b32d9754f",
+  "gpu_environment_lock_sha256": "2448b6a68a9c4b7c1c19f082d8b7b3b9e2373acdc057713dc3cd90eaaa0941ff",
+  "baseline_environment_lock_sha256": "9500f5e75fa4794410e0cc91517d5873277dc2a92914fb072671848c0669f6ac",
+  "protected_holdout_start": 1785024300,
+  "availability_delay_seconds": 300,
+  "context_hours": 168,
+  "horizon_hours": 24,
+  "sample_paths_per_origin": 256,
+  "base_seed": 11,
+  "folds": [
+    {
+      "fold": 1,
+      "train_start": "2024-10-29T00:00:00Z",
+      "train_start_unix": 1730160000,
+      "validation_start": "2025-10-29T00:00:00Z",
+      "validation_start_unix": 1761696000,
+      "validation_end_exclusive": "2026-01-27T00:00:00Z",
+      "validation_end_exclusive_unix": 1769472000
+    },
+    {
+      "fold": 2,
+      "train_start": "2025-01-27T00:00:00Z",
+      "train_start_unix": 1737936000,
+      "validation_start": "2026-01-27T00:00:00Z",
+      "validation_start_unix": 1769472000,
+      "validation_end_exclusive": "2026-04-27T00:00:00Z",
+      "validation_end_exclusive_unix": 1777248000
+    },
+    {
+      "fold": 3,
+      "train_start": "2025-04-27T00:00:00Z",
+      "train_start_unix": 1745712000,
+      "validation_start": "2026-04-27T00:00:00Z",
+      "validation_start_unix": 1777248000,
+      "validation_end_exclusive": "2026-07-26T00:00:00Z",
+      "validation_end_exclusive_unix": 1785024000
+    }
+  ],
+  "timing_and_purge_rules": {
+    "origin_decision_time": "origin_bucket_ts + 3600 + availability_delay_seconds",
+    "train_origin_rule": "train_start <= origin_bucket_ts < validation_start and usable[origin] and final_target_available_at < validation_start + 3600 + availability_delay_seconds",
+    "parameter_fit_cutoff": "All per-fold model parameters, scalers, quantiles, innovation pools, and residual copulas use observations strictly with bucket_ts < validation_start (available at <= validation_start + 300, strictly before first validation decision at validation_start + 3900).",
+    "validation_origin_rule": "validation_start <= origin_bucket_ts < validation_end_exclusive and usable[origin] and final_target_available_at < min(validation_end_exclusive + 3600 + availability_delay_seconds, protected_holdout_start)",
+    "causal_online_filtering": "During validation, parametric state-space, EWMA, and GARCH filters update state using only causal observations up to and including origin_bucket_ts with frozen training parameters; no refitting or backward smoothing is permitted."
+  },
+  "target_cohorts": {
+    "primary_joint_and_marginal_cohort": {
+      "name": "complete_24h",
+      "definition": "Origin hour t is usable and all 24 future hourly buckets t+1..t+24 are usable (25 consecutive usable mid-price observations).",
+      "purpose": "Required for joint trajectory metrics (Energy Score, Variogram Score, pathwise max-excursion tail Brier) and exact parity with joint trajectory neural models."
+    },
+    "sensitivity_marginal_cohort": {
+      "name": "endpoint_marginal",
+      "definition": "Origin hour t is usable and endpoint hour t+h is usable for h in {1, 4, 24}, regardless of whether intermediate hours between t and t+h had missing/inverted sides.",
+      "purpose": "Quantifies target-completeness / liquidity censoring bias introduced by requiring 24 consecutive usable future hours."
+    },
+    "non_overlapping_sensitivity": {
+      "name": "stride_24h",
+      "definition": "Subsample complete_24h validation origins with origin_bucket_ts % 86400 == 0 (one non-overlapping 24h trajectory window per day).",
+      "purpose": "Verifies rankings are not distorted by 23/24-hour overlapping forecast-error autocorrelation."
+    }
+  },
+  "liquidity_stratification": {
+    "manifest_unit_volume_strata": "Preserved as recorded in data_manifest.json (ranked by initial-year raw unit volume; known to rank cheap runes/feathers high and high-GP equipment low).",
+    "gp_notional_turnover_strata": "Computed strictly on initial selection year [1730160000, 1761696000) usable hours via sum(mid_price * (high_price_volume + low_price_volume)), split 25 high / 25 medium / 24 low.",
+    "representative_12_item_subset_ids": [
+      1391,
+      566,
+      2,
+      453,
+      1617,
+      1601,
+      21326,
+      8780,
+      564,
+      231,
+      554,
+      1511
+    ],
+    "representative_12_item_rule": "4 evenly quantile-spaced items (`np.linspace(0, len(stratum)-1, 4, dtype=int)`) from each initial-year GP-notional tercile (high, medium, low)."
+  },
+  "baseline_families": {
+    "trivial_and_nonparametric": [
+      "no_change",
+      "gaussian_rw_std",
+      "gaussian_rw_mad",
+      "empirical_iid_rw",
+      "empirical_block24_rw",
+      "rolling_168h_gaussian",
+      "rolling_168h_drift_gaussian",
+      "seasonal_naive_24h",
+      "seasonal_naive_168h"
+    ],
+    "ewma_and_state_space_all_74_items": [
+      "ewma_iid_gaussian",
+      "ewma_iid_student_t",
+      "ets_ses_gaussian",
+      "ets_ses_student_t",
+      "ets_ewma_student_t",
+      "ets_damped_gaussian",
+      "arima_aicc_gaussian",
+      "ma1_garch11_gaussian",
+      "ma1_garch11_student_t"
+    ],
+    "tabular_and_linear_all_74_items": [
+      "ridge_lag_homoskedastic",
+      "ridge_lag_ewma_student_t",
+      "catboost_multiquantile_copula"
+    ]
+  },
+  "scoring_and_selection_rules": {
+    "fold_item_scale": "Per-fold, per-item 1-hour training return scale `scale_{i,f} = max(1.4826 * MAD(r_{train}), 1e-4)` computed strictly on fold f training window.",
+    "primary_metric": "primary_macro_scaled_crps_1_4_24: for each fold f and item i, average fair sample CRPS(R_hat_{t,h} / scale_{i,f}, R_{t,h} / scale_{i,f}) over item i's eligible validation origins, equal-macro-average across all 74 items, equal-average over h in {1, 4, 24}, then average equally across the 3 chronological folds.",
+    "registered_interval_alphas": [
+      0.05,
+      0.1,
+      0.2,
+      0.5
+    ],
+    "nominal_coverages_reported": [
+      0.95,
+      0.9,
+      0.8,
+      0.5
+    ],
+    "joint_metrics": [
+      "macro_scaled_energy",
+      "macro_scaled_variogram_p05_unbiased",
+      "macro_scaled_variogram_p05_plugin",
+      "horizon_shuffle_delta_variogram_unbiased"
+    ],
+    "tail_diagnostics": [
+      "brier_abs_r24_ge_0p05",
+      "brier_max_r_ge_log1p03",
+      "pit_mean_and_std_h1_h4_h24"
+    ],
+    "bootstrap_inference": {
+      "primary_scheme": "paired_panel_block_bootstrap moving-block on intact contiguous hourly fold calendar grid [T_f, 74], macro-averaging available items per resampled block",
+      "primary_block_length_hours": 168,
+      "sensitivity_block_lengths_hours": [
+        72,
+        336
+      ],
+      "stationary_bootstrap_check": true,
+      "repetitions": 2000,
+      "multiplicity_correction": "Holm-Bonferroni across candidate baselines tested against gaussian_rw_std and strongest baseline"
+    },
+    "strongest_calibrated_baseline_selection_rule": "Among full-universe (74-item) E1 baselines whose 3-fold mean nominal 90% prediction interval coverage lies within [0.87, 0.93] at all three registered horizons h in {1, 4, 24}, select the baseline with lowest 3-fold mean primary_macro_scaled_crps_1_4_24. Fallback if empty: select minimum max_{h in {1,4,24}} |cov90_h - 0.90| within 1% of best CRPS and flag calibration miss explicitly.",
+    "neural_promotion_gate_for_e2_e4": "A neural model family justifies promotion only if it improves 3-fold mean primary_macro_scaled_crps_1_4_24 by >= 2.0% relative over the strongest calibrated E1 baseline while maintaining 90% coverage in [0.87, 0.93]; joint-dependence claims additionally require >= 5.0% relative improvement in macro_scaled_variogram_p05_unbiased over both the strongest marginal/independent baseline and its own horizon-shuffled control."
+  }
+}

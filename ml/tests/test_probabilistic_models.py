@@ -6,7 +6,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from osrs_ml.probabilistic_models import build_model  # noqa: E402
+from osrs_ml.probabilistic_models import STUDENT_T_DF_FLOOR, build_model  # noqa: E402
 
 
 def batch(horizon=24):
@@ -35,6 +35,17 @@ def test_joint_likelihood_samples_and_finite_backward(name):
     assert samples.shape == (3, 11, 24)
     assert torch.isfinite(samples).all()
     assert not samples.requires_grad
+
+
+def test_student_t_df_floor_guarantees_finite_variance():
+    model = build_model("student_t", 5, horizon=4, width=8, item_count=4)
+    with torch.no_grad():
+        model.head.weight.zero_()
+        model.head.bias.fill_(-50.0)
+    context, _, items = batch(horizon=4)
+    dist = model.distribution(context, items)
+    assert (dist.base_dist.df >= STUDENT_T_DF_FLOOR).all()
+    assert torch.isfinite(dist.variance).all()
 
 
 @pytest.mark.parametrize("name", ["gaussian_diag", "gaussian_lowrank"])
@@ -115,6 +126,31 @@ def test_optional_spline_flow_roundtrip_density_and_backward():
     assert samples.shape == (3, 7, 6)
     assert torch.isfinite(samples).all()
     assert torch.isfinite(model.log_prob(context, samples[:, 0], items)).all()
+
+
+def test_spline_flow_extreme_tails_propagate_gradient_to_affine_and_encoder():
+    if importlib.util.find_spec("nflows") is None:
+        pytest.skip("optional nflows dependency is absent")
+    torch.manual_seed(31)
+    model = build_model("spline_flow", 5, horizon=6, width=16, item_count=4)
+    context, _, items = batch(horizon=6)
+    # Initialize non-zero affine weights so encoder receives gradients on extreme tail targets.
+    with torch.no_grad():
+        affine = model.flow._transform._transforms[0]
+        affine.head.weight.normal_(0.0, 0.05)
+    extreme_target = torch.full((3, 6), 12.0)  # Far outside [-6, 6] spline box.
+    loss = model.loss(context, extreme_target, items)
+    loss.backward()
+    assert affine.head.bias.grad is not None
+    assert affine.head.bias.grad.abs().max() > 1.0
+    encoder_grad_norm = sum(p.grad.abs().sum().item() for p in model.encoder.parameters())
+    assert encoder_grad_norm > 0.0
+
+    # Verify legacy pilot_v1 variant remains constructible for archived pilot checkpoints.
+    legacy = build_model(
+        "spline_flow", 8, horizon=24, width=64, item_count=74, spline_variant="pilot_v1"
+    )
+    assert sum(p.numel() for p in legacy.parameters()) == 211_888
 
 
 def test_missing_spline_dependency_has_explicit_error(monkeypatch):

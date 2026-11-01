@@ -1,7 +1,7 @@
-"""Bounded development-only pilot runner; not the full registered campaign.
+"""Bounded development-only probabilistic trajectory runner.
 
 python -m osrs_ml.probabilistic_train --panel panel.parquet --model gaussian_diag
-    --device cuda --output new-run-directory
+    --fold 1 --device cuda --output new-run-directory
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ import numpy as np
 import pandas as pd
 
 from .probabilistic_evaluation import (
+    REGISTERED_INTERVAL_ALPHAS,
     energy_score,
     interval_scores,
     sample_crps,
@@ -33,9 +34,26 @@ HOLDOUT_START = 1785024300
 TRAIN_START = int(pd.Timestamp("2024-10-29", tz="UTC").timestamp())
 VALIDATION_START = int(pd.Timestamp("2025-10-29", tz="UTC").timestamp())
 VALIDATION_END = int(pd.Timestamp("2026-01-27", tz="UTC").timestamp())
+REGISTERED_FOLDS = {
+    1: (
+        int(pd.Timestamp("2024-10-29", tz="UTC").timestamp()),
+        int(pd.Timestamp("2025-10-29", tz="UTC").timestamp()),
+        int(pd.Timestamp("2026-01-27", tz="UTC").timestamp()),
+    ),
+    2: (
+        int(pd.Timestamp("2025-01-27", tz="UTC").timestamp()),
+        int(pd.Timestamp("2026-01-27", tz="UTC").timestamp()),
+        int(pd.Timestamp("2026-04-27", tz="UTC").timestamp()),
+    ),
+    3: (
+        int(pd.Timestamp("2025-04-27", tz="UTC").timestamp()),
+        int(pd.Timestamp("2026-04-27", tz="UTC").timestamp()),
+        int(pd.Timestamp("2026-07-26", tz="UTC").timestamp()),
+    ),
+}
 CONTEXT = 168
 HORIZON = 24
-FEATURES = (
+PILOT_FEATURES = (
     "scaled_return",
     "scaled_log_volume",
     "relative_side_price_difference",
@@ -44,6 +62,11 @@ FEATURES = (
     "missing_price",
     "hour_sin",
     "hour_cos",
+)
+FEATURES = PILOT_FEATURES + (
+    "bridged_scaled_return",
+    "freshness_age_log1p",
+    "inverted_side",
 )
 
 
@@ -55,18 +78,41 @@ def file_hash(path):
     return digest.hexdigest()
 
 
+def _git_provenance():
+    repo_dir = Path(__file__).resolve().parent
+    try:
+        commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=repo_dir, text=True, stderr=subprocess.DEVNULL
+        ).strip()
+        dirty = bool(
+            subprocess.check_output(
+                ["git", "status", "--porcelain"],
+                cwd=repo_dir,
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+        )
+        return commit, dirty
+    except (OSError, subprocess.CalledProcessError):
+        return "unavailable", None
+
+
 def load_verified_panel(path):
     """Verify payload hash and declared scope BEFORE opening the Parquet parser."""
     path = Path(path)
     manifest_path = path.with_suffix(".manifest.json")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    delay_seconds = manifest.get("availability_delay_seconds")
     if (
         manifest.get("holdout_start") != HOLDOUT_START
         or manifest.get("selection_end_exclusive") != VALIDATION_START
         or manifest.get("start") != TRAIN_START
         or manifest.get("end_exclusive", HOLDOUT_START + 1) > HOLDOUT_START
         or manifest.get("quality", {}).get("max_ts", HOLDOUT_START) >= HOLDOUT_START
-        or manifest.get("availability_delay_seconds") != 300
+        or not isinstance(delay_seconds, int)
+        or isinstance(delay_seconds, bool)
+        or delay_seconds < 0
+        or delay_seconds != 300
         or not manifest.get("gates", {}).get("development_only")
     ):
         raise ValueError("Unqualified panel manifest scope, selection, timing or holdout gate")
@@ -91,7 +137,7 @@ def load_verified_panel(path):
         or (frame.ts >= HOLDOUT_START).any()
         or (frame.ts < TRAIN_START).any()
         or (frame.ts % HOUR != 0).any()
-        or (frame.available_at != frame.ts + HOUR + 300).any()
+        or (frame.available_at != frame.ts + HOUR + delay_seconds).any()
         or frame.duplicated(["item_id", "ts"]).any()
         or set(frame.item_id.unique()) != set(manifest["selected_ids"])
     ):
@@ -112,9 +158,14 @@ class PanelArrays:
     rw_scale: np.ndarray
     volume_center: np.ndarray
     volume_scale: np.ndarray
+    prices: np.ndarray | None = None
+    usable: np.ndarray | None = None
+    availability_delay_seconds: int = 300
+    feature_names: tuple[str, ...] = FEATURES
 
     def windows(self, origins):
         """Materialize only the requested minibatch, never all context windows."""
+        origins = np.asarray(origins, dtype=np.int64)
         contexts, targets = [], []
         for item, origin in origins:
             contexts.append(self.features[item, origin - CONTEXT + 1 : origin + 1])
@@ -129,29 +180,57 @@ class PanelArrays:
         )
 
 
-def prepare_arrays(frame, *, selection_end=VALIDATION_START):
-    """Create an hourly grid; every fitted statistic uses the initial year only."""
+def prepare_arrays(
+    frame,
+    *,
+    train_start=TRAIN_START,
+    selection_end=VALIDATION_START,
+    feature_set="campaign",
+    availability_delay_seconds=300,
+):
+    """Create an hourly grid; every fitted statistic uses the active fold training window only."""
+    if feature_set == "campaign":
+        feature_names = FEATURES
+    elif feature_set == "pilot_v1":
+        feature_names = PILOT_FEATURES
+    else:
+        raise ValueError("feature_set must be 'campaign' or 'pilot_v1'")
+
     item_ids = np.sort(frame.item_id.unique())
     times = np.arange(int(frame.ts.min()), int(frame.ts.max()) + HOUR, HOUR)
     if len(times) < CONTEXT + HORIZON:
         raise ValueError("Insufficient hourly history")
     shape = (len(item_ids), len(times))
-    features, returns = np.zeros((*shape, len(FEATURES)), dtype=np.float32), np.full(shape, np.nan)
+    features = np.zeros((*shape, len(feature_names)), dtype=np.float32)
+    returns = np.full(shape, np.nan, dtype=np.float64)
+    prices_arr = np.full(shape, np.nan, dtype=np.float64)
+    usable_arr = np.zeros(shape, dtype=bool)
     centers, scales, rw_scales, volume_centers, volume_scales = [], [], [], [], []
-    train_mask = (times >= TRAIN_START) & (times < selection_end)
+    train_mask = (times >= train_start) & (times < selection_end)
+    angles = 2 * np.pi * ((times // HOUR) % 24) / 24
+    sin_hour, cos_hour = np.sin(angles), np.cos(angles)
+    idx_grid = np.arange(len(times), dtype=np.int64)
+
+    sorted_frame = frame.sort_values(["item_id", "ts"], kind="mergesort")
+    grouped = {int(k): grp for k, grp in sorted_frame.groupby("item_id", sort=False)}
+
     for position, item_id in enumerate(item_ids):
-        group = frame[frame.item_id == item_id].set_index("ts").reindex(times)
+        group = grouped[int(item_id)].set_index("ts").reindex(times)
         price = group.mid_price.to_numpy(dtype=float).copy()
         usable = group.usable.eq(True).to_numpy(dtype=bool)
         price[~usable | ~np.isfinite(price) | (price <= 0)] = np.nan
+        prices_arr[position] = price
+        usable_arr[position] = np.isfinite(price)
         with np.errstate(invalid="ignore", divide="ignore"):
-            increments = np.r_[np.nan, np.diff(np.log(price))]
+            log_price = np.log(price)
+            increments = np.r_[np.nan, np.diff(log_price)]
         returns[position] = increments
         initial = increments[train_mask & np.isfinite(increments)]
         if len(initial) < 48:
             raise ValueError(f"Insufficient training-only returns for item {item_id}")
         center = float(np.median(initial))
         scale = max(float(1.4826 * np.median(np.abs(initial - center))), 1e-4)
+
         high_volume = group.high_price_volume.to_numpy(dtype=float)
         low_volume = group.low_price_volume.to_numpy(dtype=float)
         valid_volume = (
@@ -167,10 +246,20 @@ def prepare_arrays(frame, *, selection_end=VALIDATION_START):
             raise ValueError("No observed training volumes")
         volume_center = float(np.median(initial_volume))
         volume_scale = max(float(1.4826 * np.median(np.abs(initial_volume - volume_center))), 1e-3)
+
         high = group.avg_high_price.to_numpy(dtype=float)
         low = group.avg_low_price.to_numpy(dtype=float)
+        both_sides_positive = np.isfinite(high) & np.isfinite(low) & (high > 0) & (low > 0)
+        inverted_side = both_sides_positive & (high < low)
         with np.errstate(invalid="ignore", divide="ignore"):
-            spread = (high - low) / price
+            if feature_set == "pilot_v1":
+                spread = (high - low) / price
+            else:
+                spread_denom = np.where(np.isfinite(price), price, 0.5 * (high + low))
+                spread = np.where(
+                    both_sides_positive & (spread_denom > 0), (high - low) / spread_denom, np.nan
+                )
+
         values = features[position]
         values[:, 0] = np.where(np.isfinite(increments), (increments - center) / scale, 0)
         values[:, 1] = np.where(np.isfinite(volume), (volume - volume_center) / volume_scale, 0)
@@ -178,53 +267,170 @@ def prepare_arrays(frame, *, selection_end=VALIDATION_START):
         values[:, 3] = ~np.isfinite(increments)
         values[:, 4] = ~valid_volume
         values[:, 5] = ~np.isfinite(price)
-        angles = 2 * np.pi * ((times // HOUR) % 24) / 24
-        values[:, 6], values[:, 7] = np.sin(angles), np.cos(angles)
+        values[:, 6], values[:, 7] = sin_hour, cos_hour
+
+        if feature_set == "campaign":
+            bridged = np.zeros(len(times), dtype=np.float64)
+            valid_idx = np.flatnonzero(np.isfinite(log_price))
+            if len(valid_idx) >= 2:
+                gaps = np.diff(valid_idx).astype(np.float64)
+                jumps = np.diff(log_price[valid_idx])
+                bridged[valid_idx[1:]] = (jumps - gaps * center) / (np.sqrt(gaps) * scale)
+            last_valid = np.maximum.accumulate(np.where(np.isfinite(log_price), idx_grid, -1))
+            age_hours = np.where(
+                last_valid >= 0, idx_grid - last_valid, np.minimum(idx_grid + 1, CONTEXT)
+            )
+            values[:, 8] = bridged
+            values[:, 9] = np.log1p(age_hours)
+            values[:, 10] = inverted_side.astype(np.float32)
+
         centers.append(center)
         scales.append(scale)
         rw_scales.append(max(float(np.std(initial, ddof=1)), 1e-4))
         volume_centers.append(volume_center)
         volume_scales.append(volume_scale)
+
     if not np.isfinite(features).all():
         raise ValueError("Nonfinite or overflowing context features")
     return PanelArrays(
-        times,
-        item_ids,
-        features,
-        returns,
-        np.array(centers),
-        np.array(scales),
-        np.array(rw_scales),
-        np.array(volume_centers),
-        np.array(volume_scales),
+        times=times,
+        item_ids=item_ids,
+        features=features,
+        returns=returns,
+        center=np.array(centers),
+        scale=np.array(scales),
+        rw_scale=np.array(rw_scales),
+        volume_center=np.array(volume_centers),
+        volume_scale=np.array(volume_scales),
+        prices=prices_arr,
+        usable=usable_arr,
+        availability_delay_seconds=int(availability_delay_seconds),
+        feature_names=feature_names,
     )
 
 
-def eligible_origins(panel, *, validation_start=VALIDATION_START, validation_end=VALIDATION_END):
-    """Train targets must be available strictly before the first validation decision."""
-    train, validation = [], []
-    first_validation_decision = validation_start + HOUR + 300
-    for item in range(len(panel.item_ids)):
-        valid = np.isfinite(panel.returns[item])
-        for origin in range(CONTEXT - 1, len(panel.times) - HORIZON):
-            timestamp = panel.times[origin]
-            final_timestamp = panel.times[origin + HORIZON]
-            final_available = final_timestamp + HOUR + 300
-            if (
-                not valid[origin + 1 : origin + HORIZON + 1].all()
-                or final_available >= HOLDOUT_START
-            ):
-                continue
-            if timestamp < validation_start and final_available < first_validation_decision:
-                train.append((item, origin))
-            elif (
-                validation_start <= timestamp < validation_end and final_available < validation_end
-            ):
-                validation.append((item, origin))
+def _origin_masks(
+    panel: PanelArrays,
+    *,
+    train_start: int = TRAIN_START,
+    validation_start: int = VALIDATION_START,
+    validation_end: int = VALIDATION_END,
+    delay_seconds: int | None = None,
+):
+    delay = panel.availability_delay_seconds if delay_seconds is None else int(delay_seconds)
+    origins = np.arange(CONTEXT - 1, len(panel.times) - HORIZON, dtype=np.int64)
+    if len(origins) == 0:
+        empty = np.zeros((len(panel.item_ids), 0), dtype=bool)
+        return origins, empty, empty, np.zeros(0, dtype=bool), np.zeros(0, dtype=bool)
+    timestamps = panel.times[origins]
+    final_available = panel.times[origins + HORIZON] + HOUR + delay
+    first_validation_decision = validation_start + HOUR + delay
+    validation_cutoff = min(validation_end + HOUR + delay, HOLDOUT_START)
+
+    train_time_ok = (
+        (timestamps >= train_start)
+        & (timestamps < validation_start)
+        & (final_available < first_validation_decision)
+        & (final_available < HOLDOUT_START)
+    )
+    val_time_ok = (
+        (timestamps >= validation_start)
+        & (timestamps < validation_end)
+        & (final_available < validation_cutoff)
+    )
+    valid_returns = np.isfinite(panel.returns)
+    bad_prefix = np.concatenate(
+        [np.zeros((len(panel.item_ids), 1), dtype=np.int64), np.cumsum(~valid_returns, axis=1)],
+        axis=1,
+    )
+    complete_24h = (bad_prefix[:, origins + HORIZON + 1] - bad_prefix[:, origins + 1]) == 0
     return (
-        np.asarray(train, dtype=np.int64).reshape(-1, 2),
-        np.asarray(validation, dtype=np.int64).reshape(-1, 2),
+        origins,
+        complete_24h & train_time_ok[None, :],
+        complete_24h & val_time_ok[None, :],
+        train_time_ok,
+        val_time_ok,
     )
+
+
+def eligible_origins(
+    panel,
+    *,
+    train_start=TRAIN_START,
+    validation_start=VALIDATION_START,
+    validation_end=VALIDATION_END,
+    delay_seconds=None,
+):
+    """Train targets must be available strictly before the first validation decision."""
+    origins, train_mask, val_mask, _, _ = _origin_masks(
+        panel,
+        train_start=train_start,
+        validation_start=validation_start,
+        validation_end=validation_end,
+        delay_seconds=delay_seconds,
+    )
+    train_rc = np.argwhere(train_mask)
+    val_rc = np.argwhere(val_mask)
+    train = (
+        np.column_stack([train_rc[:, 0], origins[train_rc[:, 1]]]).astype(np.int64)
+        if len(train_rc)
+        else np.empty((0, 2), dtype=np.int64)
+    )
+    validation = (
+        np.column_stack([val_rc[:, 0], origins[val_rc[:, 1]]]).astype(np.int64)
+        if len(val_rc)
+        else np.empty((0, 2), dtype=np.int64)
+    )
+    return train, validation
+
+
+def eligible_origin_diagnostics(
+    panel,
+    *,
+    train_start=TRAIN_START,
+    validation_start=VALIDATION_START,
+    validation_end=VALIDATION_END,
+    delay_seconds=None,
+):
+    """Return candidate counts and complete-window survival diagnostics per split and item."""
+    origins, train_mask, val_mask, train_time_ok, val_time_ok = _origin_masks(
+        panel,
+        train_start=train_start,
+        validation_start=validation_start,
+        validation_end=validation_end,
+        delay_seconds=delay_seconds,
+    )
+    n_items = len(panel.item_ids)
+    n_train_times = int(train_time_ok.sum())
+    n_val_times = int(val_time_ok.sum())
+    usable_origin = (
+        panel.usable[:, origins]
+        if panel.usable is not None
+        else np.isfinite(panel.returns[:, origins])
+    )
+    train_candidates = n_items * n_train_times
+    val_candidates = n_items * n_val_times
+    train_usable_origins = int((usable_origin & train_time_ok[None, :]).sum())
+    val_usable_origins = int((usable_origin & val_time_ok[None, :]).sum())
+    train_retained = int(train_mask.sum())
+    val_retained = int(val_mask.sum())
+    return {
+        "train_time_steps": n_train_times,
+        "train_candidate_pairs": train_candidates,
+        "train_usable_origin_pairs": train_usable_origins,
+        "train_complete_24h_pairs": train_retained,
+        "train_complete_24h_survival_vs_candidates": (
+            float(train_retained / train_candidates) if train_candidates else 0.0
+        ),
+        "validation_time_steps": n_val_times,
+        "validation_candidate_pairs": val_candidates,
+        "validation_usable_origin_pairs": val_usable_origins,
+        "validation_complete_24h_pairs": val_retained,
+        "validation_complete_24h_survival_vs_candidates": (
+            float(val_retained / val_candidates) if val_candidates else 0.0
+        ),
+        "per_item_validation_survival": ((val_mask.sum(axis=1) / max(n_val_times, 1)).tolist()),
+    }
 
 
 def bounded_subset(origins, limit, seed):
@@ -256,17 +462,25 @@ def configure_device(torch, requested):
 def _summarize(samples, targets):
     # Both arguments are already cumulative, unscaled log returns.
     marginal = sample_crps(samples, targets)
-    intervals = interval_scores(samples, targets)
+    intervals = interval_scores(samples, targets, alphas=REGISTERED_INTERVAL_ALPHAS)
     result = {
         "energy": float(energy_score(samples, targets).mean()),
         "variogram_p05": float(variogram_score(samples, targets).mean()),
+        "variogram_p05_unbiased": float(
+            variogram_score(samples, targets, estimator="unbiased").mean()
+        ),
     }
+    nominal_labels = {0.05: "95", 0.1: "90", 0.2: "80", 0.5: "50"}
     for hour in (1, 4, 24):
         index = hour - 1
         result[f"crps_h{hour}"] = float(marginal[:, index].mean())
         result[f"wis_h{hour}"] = float(intervals["wis"][:, index].mean())
-        result[f"coverage90_h{hour}"] = float(intervals["coverage"][0, :, index].mean())
-        result[f"width90_h{hour}"] = float(intervals["width"][0, :, index].mean())
+        for alpha_idx, alpha in enumerate(REGISTERED_INTERVAL_ALPHAS):
+            label = nominal_labels[float(alpha)]
+            result[f"coverage{label}_h{hour}"] = float(
+                intervals["coverage"][alpha_idx, :, index].mean()
+            )
+            result[f"width{label}_h{hour}"] = float(intervals["width"][alpha_idx, :, index].mean())
     return result
 
 
@@ -310,9 +524,30 @@ def _run_pilot(args, output, started, status):
         and 1 <= args.torch_threads <= 4
     ):
         raise ValueError("Pilot limits: steps1..256, batch1..256, sample draws2..2048")
+    fold_id = getattr(args, "fold", 1)
+    train_start, validation_start, validation_end = REGISTERED_FOLDS[fold_id]
     frame, manifest, manifest_hash = load_verified_panel(args.panel)
-    panel = prepare_arrays(frame)
-    train_all, validation_all = eligible_origins(panel)
+    delay_seconds = int(manifest["availability_delay_seconds"])
+    panel = prepare_arrays(
+        frame,
+        train_start=train_start,
+        selection_end=validation_start,
+        availability_delay_seconds=delay_seconds,
+    )
+    train_all, validation_all = eligible_origins(
+        panel,
+        train_start=train_start,
+        validation_start=validation_start,
+        validation_end=validation_end,
+        delay_seconds=delay_seconds,
+    )
+    cohort_diag = eligible_origin_diagnostics(
+        panel,
+        train_start=train_start,
+        validation_start=validation_start,
+        validation_end=validation_end,
+        delay_seconds=delay_seconds,
+    )
     train = bounded_subset(train_all, 20_000, args.seed)
     validation = bounded_subset(validation_all, 512, args.seed + 1)
     if not len(train) or not len(validation):
@@ -328,13 +563,12 @@ def _run_pilot(args, output, started, status):
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
     torch.set_num_threads(args.torch_threads)
-    model = build_model(args.model, len(FEATURES), HORIZON, 64, len(panel.item_ids)).to(device)
+    model = build_model(args.model, len(panel.feature_names), HORIZON, 64, len(panel.item_ids)).to(
+        device
+    )
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     generator = np.random.default_rng(args.seed)
-    try:
-        code_version = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-    except (OSError, subprocess.CalledProcessError):
-        code_version = "unavailable"
+    code_version, git_dirty = _git_provenance()
     package_freeze = sorted(
         f"{distribution.metadata['Name']}=={distribution.version}"
         for distribution in importlib.metadata.distributions()
@@ -342,23 +576,28 @@ def _run_pilot(args, output, started, status):
     (output / "environment.txt").write_text("\n".join(package_freeze) + "\n", encoding="utf-8")
     metadata = {
         "pilot_only": True,
+        "fold": fold_id,
         "panel_sha256": manifest["sha256"],
         "panel_manifest_sha256": manifest_hash,
         "code_commit": code_version,
+        "git_dirty": git_dirty,
         "runner_sha256": file_hash(__file__),
-        "features": FEATURES,
+        "features": list(panel.feature_names),
+        "data_source_sha256": file_hash(Path(__file__).with_name("probabilistic_data.py")),
         "model_source_sha256": file_hash(Path(__file__).with_name("probabilistic_models.py")),
         "evaluation_source_sha256": file_hash(
             Path(__file__).with_name("probabilistic_evaluation.py")
         ),
-        "train_start": TRAIN_START,
-        "validation_start": VALIDATION_START,
-        "validation_end_exclusive": VALIDATION_END,
+        "train_start": train_start,
+        "validation_start": validation_start,
+        "validation_end_exclusive": validation_end,
         "holdout_start": HOLDOUT_START,
-        "universe_available_at": VALIDATION_START + 300,
-        "first_validation_decision": VALIDATION_START + HOUR + 300,
-        "timing_assumption": "bucket start +3900s; source ingestion latency is unobserved",
+        "availability_delay_seconds": delay_seconds,
+        "universe_available_at": VALIDATION_START + delay_seconds,
+        "first_validation_decision": validation_start + HOUR + delay_seconds,
+        "timing_assumption": f"bucket start +{HOUR + delay_seconds}s; source ingestion latency is unobserved",
         "purge_rule": "last training target available strictly before first validation decision",
+        "cohort_diagnostics": cohort_diag,
         "train_eligible_count": len(train_all),
         "train_retained_count": len(train),
         "validation_eligible_count": len(validation_all),
@@ -373,7 +612,7 @@ def _run_pilot(args, output, started, status):
         "rw_scale": panel.rw_scale.tolist(),
         "volume_center": panel.volume_center.tolist(),
         "volume_scale": panel.volume_scale.tolist(),
-        "normalization": "initial-training-year per-item median,1.4826*MAD; floors return1e-4 volume1e-3",
+        "normalization": "fold-training-year per-item median,1.4826*MAD; floors return1e-4 volume1e-3",
         "device": str(device),
         "gpu": torch.cuda.get_device_name(device) if device.type == "cuda" else None,
         "torch": torch.__version__,
@@ -387,7 +626,7 @@ def _run_pilot(args, output, started, status):
         "torch_threads": args.torch_threads,
         "cuda_memory_fraction": 0.75,
         "num_samples": args.num_samples,
-        "wis_alphas": [0.1, 0.2, 0.5],
+        "wis_alphas": list(REGISTERED_INTERVAL_ALPHAS),
         "crps_estimator": "fair iid U-statistic",
         "no_confirmatory_claim": True,
     }
@@ -422,7 +661,7 @@ def _run_pilot(args, output, started, status):
             progress.flush()
     model.eval()
     scores = {name: [] for name in ("model", "gaussian_rw", "no_change")}
-    nlls, origin_scores = [], []
+    nlls, raw_nlls, origin_scores = [], [], []
     evaluation_rng = np.random.default_rng(args.seed + 101)
     with torch.no_grad():
         for left in range(0, len(validation), 16):
@@ -434,12 +673,11 @@ def _run_pilot(args, output, started, status):
             samples = model.sample(context_tensor, item_tensor, args.num_samples).cpu().numpy()
             if not np.isfinite(samples).all():
                 raise FloatingPointError("Nonfinite forecast samples")
-            nlls.extend(
-                (
-                    -model.log_prob(context_tensor, target_tensor, item_tensor).cpu().numpy()
-                    / HORIZON
-                ).tolist()
+            batch_nll = (
+                -model.log_prob(context_tensor, target_tensor, item_tensor).cpu().numpy() / HORIZON
             )
+            nlls.extend(batch_nll.tolist())
+            raw_nlls.extend((batch_nll + np.log(panel.scale[items])).tolist())
             scale, center = panel.scale[items, None, None], panel.center[items, None, None]
             cumulative_samples = np.cumsum(samples * scale + center, axis=-1)
             actual = np.cumsum(
@@ -462,10 +700,14 @@ def _run_pilot(args, output, started, status):
                     {
                         "item_id": int(panel.item_ids[item]),
                         "origin_bucket_ts": int(panel.times[origin]),
-                        "decision_at": int(panel.times[origin] + HOUR + 300),
+                        "decision_at": int(panel.times[origin] + HOUR + delay_seconds),
+                        "item_scale": float(panel.scale[item]),
                         "crps_h1": float(crps[row, 0]),
                         "crps_h4": float(crps[row, 3]),
                         "crps_h24": float(crps[row, 23]),
+                        "scaled_crps_h1": float(crps[row, 0] / panel.scale[item]),
+                        "scaled_crps_h4": float(crps[row, 3] / panel.scale[item]),
+                        "scaled_crps_h24": float(crps[row, 23] / panel.scale[item]),
                     }
                 )
     metrics = {
@@ -476,6 +718,7 @@ def _run_pilot(args, output, started, status):
         for name, chunks in scores.items()
     }
     metrics["model"]["normalized_nll_per_increment"] = float(np.mean(nlls))
+    metrics["model"]["raw_return_nll_per_increment"] = float(np.mean(raw_nlls))
     if not all(np.isfinite(value) for summary in metrics.values() for value in summary.values()):
         raise FloatingPointError("Nonfinite evaluation metric")
     _json(output / "metrics.json", metrics)
@@ -499,6 +742,9 @@ def _run_pilot(args, output, started, status):
         steps_completed=args.max_steps,
         validation_origins_scored=len(validation),
         peak_cuda_memory_bytes=torch.cuda.max_memory_allocated(device)
+        if device.type == "cuda"
+        else 0,
+        peak_cuda_reserved_bytes=torch.cuda.max_memory_reserved(device)
         if device.type == "cuda"
         else 0,
         artifacts_sha256={
@@ -525,6 +771,7 @@ def main():
         required=True,
         choices=("gaussian_diag", "gaussian_lowrank", "student_t", "spline_flow"),
     )
+    parser.add_argument("--fold", type=int, default=1, choices=(1, 2, 3))
     parser.add_argument("--seed", type=int, default=11)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--max-steps", type=int, default=256)
