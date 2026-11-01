@@ -232,6 +232,36 @@ class RecursiveStudentTModel(ProbabilisticModel):
     def _advance_feature_step(self, prev_feat: Tensor, step_return: Tensor) -> Tensor:
         f_dim = self.context_features
         r_c = step_return.float().clamp(-25.0, 25.0)
+        z = torch.zeros_like(r_c)
+        if f_dim == 13:
+            # Exact causal recurrence for E3_PRICE_ONLY_FEATURES (13 price-only columns).
+            h_sin, h_cos = prev_feat[:, 3], prev_feat[:, 4]
+            w_sin, w_cos = prev_feat[:, 7], prev_feat[:, 8]
+            d4 = (self._decay_4 * (prev_feat[:, 9] + r_c * 0.5)).clamp(-20.0, 20.0)
+            d24 = (self._decay_24 * (prev_feat[:, 10] + r_c / math.sqrt(24.0))).clamp(-20.0, 20.0)
+            d72 = (self._decay_72 * (prev_feat[:, 11] + r_c / math.sqrt(72.0))).clamp(-20.0, 20.0)
+            v2_prev = (prev_feat[:, 12] + 1.0).clamp(min=0.05).square()
+            v2_next = self._decay_24 * v2_prev + (1.0 - self._decay_24) * r_c.square().clamp(
+                max=36.0
+            )
+            return torch.stack(
+                [
+                    r_c,
+                    z,
+                    z,
+                    h_sin * self._cos_1h + h_cos * self._sin_1h,
+                    h_cos * self._cos_1h - h_sin * self._sin_1h,
+                    r_c,
+                    z,
+                    w_sin * self._cos_1w + w_cos * self._sin_1w,
+                    w_cos * self._cos_1w - w_sin * self._sin_1w,
+                    d4,
+                    d24,
+                    d72,
+                    torch.sqrt(v2_next) - 1.0,
+                ],
+                dim=-1,
+            )
         cols = [r_c]
         if f_dim > 1:
             cols.append(prev_feat[:, 1] * self._decay_24)

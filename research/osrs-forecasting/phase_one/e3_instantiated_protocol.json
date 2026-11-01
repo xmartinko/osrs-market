@@ -1,0 +1,205 @@
+{
+  "instantiated_at_utc": "2026-11-01T14:09:00+00:00",
+  "campaign_id": "E3_FEATURE_ABLATION_INSTANTIATION",
+  "parent_protocol": "e2_e4_campaign_protocol.json",
+  "parent_protocol_sha256": "5e1533a5ccfe2a5f79aa64bce6ed863c86811b4259b0f010ba7e74d8680ee39a",
+  "panel_sha256": "5a5bf0fa4d656b24b4df5883804fbb32068e5c0262924c3d51ccffe93af321a8",
+  "panel_manifest_sha256": "6b4f501c4bf54c33df386caf5f4e46679d9273bddaf3cb6dc6ed967b32d9754f",
+  "protected_holdout_start": 1785024300,
+  "model_selection_instantiation": {
+    "preregistered_rule": "Uses spline_flow campaign_v3 by default, or the lowest-CRPS calibrated E2 architecture if another calibrated E2 model achieves strictly lower 3-fold primary_macro_scaled_crps_1_4_24.",
+    "calibrated_e2_candidates_ranked_by_crps": [
+      {
+        "candidate_id": "recursive_student_t",
+        "primary_macro_scaled_crps_1_4_24": 1.1506707390612332,
+        "scaled_variogram_p05_unbiased": 92.89604387130464,
+        "overall_gate_pass": true
+      },
+      {
+        "candidate_id": "direct_marginal_student_t",
+        "primary_macro_scaled_crps_1_4_24": 1.1507722101364362,
+        "scaled_variogram_p05_unbiased": 136.29578275641504,
+        "overall_gate_pass": false
+      },
+      {
+        "candidate_id": "spline_flow",
+        "primary_macro_scaled_crps_1_4_24": 1.1668348017175654,
+        "scaled_variogram_p05_unbiased": 94.3807784665889,
+        "overall_gate_pass": false
+      }
+    ],
+    "selected_model": "recursive_student_t",
+    "reference_19col_e2_matched_seed11_fits": [
+      "e2_recursive_student_t_f1_s11",
+      "e2_recursive_student_t_f2_s11",
+      "e2_recursive_student_t_f3_s11"
+    ]
+  },
+  "budget_accounting": {
+    "prior_pilot_slots_used": 5,
+    "e2_slots_completed": 54,
+    "e2_slots_failed": 0,
+    "e3_slots_dispatched": 9,
+    "e4_prospective_slots_reserved": 4,
+    "total_slots": 72
+  },
+  "queues": {
+    "rtx5080_e3": [
+      {
+        "experiment_id": "E3",
+        "candidate_id": "e3_ablation_pilot_v1_8col",
+        "fit_id": "e3_rec_student_t_pilot_v1_8col_f1_s11",
+        "model": "recursive_student_t",
+        "feature_set": "pilot_v1",
+        "fold": 1,
+        "seed": 11,
+        "width": 64,
+        "max_steps": 2400,
+        "batch_size": 256,
+        "lr": 0.0015,
+        "eval_every": 400,
+        "min_steps": 1200,
+        "patience_checks": 3,
+        "num_samples": 256
+      },
+      {
+        "experiment_id": "E3",
+        "candidate_id": "e3_ablation_pilot_v1_8col",
+        "fit_id": "e3_rec_student_t_pilot_v1_8col_f2_s11",
+        "model": "recursive_student_t",
+        "feature_set": "pilot_v1",
+        "fold": 2,
+        "seed": 11,
+        "width": 64,
+        "max_steps": 2400,
+        "batch_size": 256,
+        "lr": 0.0015,
+        "eval_every": 400,
+        "min_steps": 1200,
+        "patience_checks": 3,
+        "num_samples": 256
+      },
+      {
+        "experiment_id": "E3",
+        "candidate_id": "e3_ablation_pilot_v1_8col",
+        "fit_id": "e3_rec_student_t_pilot_v1_8col_f3_s11",
+        "model": "recursive_student_t",
+        "feature_set": "pilot_v1",
+        "fold": 3,
+        "seed": 11,
+        "width": 64,
+        "max_steps": 2400,
+        "batch_size": 256,
+        "lr": 0.0015,
+        "eval_every": 400,
+        "min_steps": 1200,
+        "patience_checks": 3,
+        "num_samples": 256
+      },
+      {
+        "experiment_id": "E3",
+        "candidate_id": "e3_ablation_campaign_11col",
+        "fit_id": "e3_rec_student_t_campaign_11col_f1_s11",
+        "model": "recursive_student_t",
+        "feature_set": "campaign",
+        "fold": 1,
+        "seed": 11,
+        "width": 64,
+        "max_steps": 2400,
+        "batch_size": 256,
+        "lr": 0.0015,
+        "eval_every": 400,
+        "min_steps": 1200,
+        "patience_checks": 3,
+        "num_samples": 256
+      },
+      {
+        "experiment_id": "E3",
+        "candidate_id": "e3_ablation_campaign_11col",
+        "fit_id": "e3_rec_student_t_campaign_11col_f2_s11",
+        "model": "recursive_student_t",
+        "feature_set": "campaign",
+        "fold": 2,
+        "seed": 11,
+        "width": 64,
+        "max_steps": 2400,
+        "batch_size": 256,
+        "lr": 0.0015,
+        "eval_every": 400,
+        "min_steps": 1200,
+        "patience_checks": 3,
+        "num_samples": 256
+      },
+      {
+        "experiment_id": "E3",
+        "candidate_id": "e3_ablation_campaign_11col",
+        "fit_id": "e3_rec_student_t_campaign_11col_f3_s11",
+        "model": "recursive_student_t",
+        "feature_set": "campaign",
+        "fold": 3,
+        "seed": 11,
+        "width": 64,
+        "max_steps": 2400,
+        "batch_size": 256,
+        "lr": 0.0015,
+        "eval_every": 400,
+        "min_steps": 1200,
+        "patience_checks": 3,
+        "num_samples": 256
+      }
+    ],
+    "rtx3070_e3": [
+      {
+        "experiment_id": "E3",
+        "candidate_id": "e3_ablation_price_only_13col",
+        "fit_id": "e3_rec_student_t_price_only_13col_f1_s11",
+        "model": "recursive_student_t",
+        "feature_set": "e3_price_only",
+        "fold": 1,
+        "seed": 11,
+        "width": 64,
+        "max_steps": 2400,
+        "batch_size": 256,
+        "lr": 0.0015,
+        "eval_every": 400,
+        "min_steps": 1200,
+        "patience_checks": 3,
+        "num_samples": 256
+      },
+      {
+        "experiment_id": "E3",
+        "candidate_id": "e3_ablation_price_only_13col",
+        "fit_id": "e3_rec_student_t_price_only_13col_f2_s11",
+        "model": "recursive_student_t",
+        "feature_set": "e3_price_only",
+        "fold": 2,
+        "seed": 11,
+        "width": 64,
+        "max_steps": 2400,
+        "batch_size": 256,
+        "lr": 0.0015,
+        "eval_every": 400,
+        "min_steps": 1200,
+        "patience_checks": 3,
+        "num_samples": 256
+      },
+      {
+        "experiment_id": "E3",
+        "candidate_id": "e3_ablation_price_only_13col",
+        "fit_id": "e3_rec_student_t_price_only_13col_f3_s11",
+        "model": "recursive_student_t",
+        "feature_set": "e3_price_only",
+        "fold": 3,
+        "seed": 11,
+        "width": 64,
+        "max_steps": 2400,
+        "batch_size": 256,
+        "lr": 0.0015,
+        "eval_every": 400,
+        "min_steps": 1200,
+        "patience_checks": 3,
+        "num_samples": 256
+      }
+    ]
+  }
+}

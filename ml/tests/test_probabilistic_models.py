@@ -175,3 +175,20 @@ def test_missing_spline_dependency_has_explicit_error(monkeypatch):
     monkeypatch.setattr(builtins, "__import__", without_nflows)
     with pytest.raises(ImportError, match="optional nflows"):
         build_model("spline_flow", 5)
+
+
+@pytest.mark.parametrize("feat_dim", [8, 11, 13, 19])
+def test_recursive_student_t_supports_all_e2_e3_feature_sets(feat_dim):
+    torch.manual_seed(17)
+    model = build_model("recursive_student_t", feat_dim, horizon=6, width=8, item_count=4)
+    ctx = torch.randn(3, 12, feat_dim)
+    tgt = torch.randn(3, 6) * 0.2
+    itm = torch.tensor([0, 1, 2], dtype=torch.long)
+    lp = model.log_prob(ctx, tgt, itm)
+    assert lp.shape == (3,)
+    assert torch.isfinite(lp).all()
+    (-lp.mean()).backward()
+    assert all(p.grad is not None and torch.isfinite(p.grad).all() for p in model.parameters())
+    samp = model.sample(ctx, itm, 5)
+    assert samp.shape == (3, 5, 6)
+    assert torch.isfinite(samp).all()
