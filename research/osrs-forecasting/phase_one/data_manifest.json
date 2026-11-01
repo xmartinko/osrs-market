@@ -1,0 +1,807 @@
+{
+  "schema_version": 1,
+  "source_version": "kaggle-5m/datasetVersionNumber=1/canonical-v2/main",
+  "created_at": "2026-11-01T07:43:48.602875+00:00",
+  "start": 1730160000,
+  "end_exclusive": 1785024000,
+  "holdout_start": 1785024300,
+  "selection_start": 1730160000,
+  "selection_end_exclusive": 1761696000,
+  "selection_min_coverage": 0.95,
+  "selected_items": [
+    {
+      "item_id": 554,
+      "coverage": 0.9708904109589042,
+      "observed_volume": 34566220823.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 1513,
+      "coverage": 0.9712328767123287,
+      "observed_volume": 1515947684.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 391,
+      "coverage": 0.9809360730593607,
+      "observed_volume": 392129223.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 556,
+      "coverage": 0.9705479452054795,
+      "observed_volume": 26859764054.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 383,
+      "coverage": 0.9635844748858448,
+      "observed_volume": 1503199946.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 207,
+      "coverage": 0.9702054794520548,
+      "observed_volume": 312262996.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 565,
+      "coverage": 0.9922374429223745,
+      "observed_volume": 24889261945.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 449,
+      "coverage": 0.9698630136986301,
+      "observed_volume": 1484021084.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 5974,
+      "coverage": 0.9641552511415525,
+      "observed_volume": 303471564.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 555,
+      "coverage": 0.9552511415525115,
+      "observed_volume": 21987814723.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 385,
+      "coverage": 0.9797945205479452,
+      "observed_volume": 1451501906.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 24598,
+      "coverage": 0.9650684931506849,
+      "observed_volume": 300539044.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 562,
+      "coverage": 0.9922374429223745,
+      "observed_volume": 20405591586.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 24607,
+      "coverage": 0.973744292237443,
+      "observed_volume": 1394597806.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 1511,
+      "coverage": 0.9689497716894977,
+      "observed_volume": 287247782.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 314,
+      "coverage": 0.9849315068493151,
+      "observed_volume": 20328562206.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 8778,
+      "coverage": 0.9722602739726027,
+      "observed_volume": 1383570997.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 12625,
+      "coverage": 0.9654109589041096,
+      "observed_volume": 243158491.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 12934,
+      "coverage": 0.990296803652968,
+      "observed_volume": 19443313639.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 11212,
+      "coverage": 0.9638127853881279,
+      "observed_volume": 1333778923.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 12695,
+      "coverage": 0.9618721461187215,
+      "observed_volume": 204964267.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 21820,
+      "coverage": 0.9937214611872146,
+      "observed_volume": 18341187538.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 536,
+      "coverage": 0.9874429223744292,
+      "observed_volume": 1199785340.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 3051,
+      "coverage": 0.9560502283105022,
+      "observed_volume": 190976231.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 560,
+      "coverage": 0.9932648401826484,
+      "observed_volume": 18272865787.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 2359,
+      "coverage": 0.9672374429223745,
+      "observed_volume": 993777671.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 22124,
+      "coverage": 0.9643835616438357,
+      "observed_volume": 170746295.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 566,
+      "coverage": 0.9876712328767123,
+      "observed_volume": 14936238733.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 1391,
+      "coverage": 0.95,
+      "observed_volume": 926665587.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 6016,
+      "coverage": 0.9614155251141553,
+      "observed_volume": 134171759.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 2,
+      "coverage": 0.9931506849315068,
+      "observed_volume": 11791114120.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 1619,
+      "coverage": 0.9526255707762558,
+      "observed_volume": 790891920.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 5295,
+      "coverage": 0.9803652968036529,
+      "observed_volume": 55015822.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 561,
+      "coverage": 0.9899543378995433,
+      "observed_volume": 11067986084.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 1603,
+      "coverage": 0.9773972602739726,
+      "observed_volume": 674341317.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 5300,
+      "coverage": 0.9700913242009133,
+      "observed_volume": 39221690.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 453,
+      "coverage": 0.9882420091324201,
+      "observed_volume": 10418484040.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 1601,
+      "coverage": 0.9679223744292238,
+      "observed_volume": 670331327.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 11968,
+      "coverage": 0.9581050228310503,
+      "observed_volume": 10475100.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 892,
+      "coverage": 0.9891552511415526,
+      "observed_volume": 6456593212.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 1617,
+      "coverage": 0.9755707762557078,
+      "observed_volume": 665551458.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 24251,
+      "coverage": 0.9518264840182649,
+      "observed_volume": 10292414.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 563,
+      "coverage": 0.9906392694063927,
+      "observed_volume": 6411538843.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 8780,
+      "coverage": 0.9555936073059361,
+      "observed_volume": 648847983.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 10828,
+      "coverage": 0.9542237442922374,
+      "observed_volume": 4420738.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 564,
+      "coverage": 0.9812785388127854,
+      "observed_volume": 5453826480.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 223,
+      "coverage": 0.955365296803653,
+      "observed_volume": 620860238.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 11840,
+      "coverage": 0.98162100456621,
+      "observed_volume": 3737618.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 444,
+      "coverage": 0.9785388127853881,
+      "observed_volume": 5046908492.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 231,
+      "coverage": 0.9544520547945206,
+      "observed_volume": 613872574.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 4093,
+      "coverage": 0.9525114155251142,
+      "observed_volume": 3688933.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 2357,
+      "coverage": 0.9762557077625571,
+      "observed_volume": 3792752203.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 2434,
+      "coverage": 0.9907534246575342,
+      "observed_volume": 559594015.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 4091,
+      "coverage": 0.958675799086758,
+      "observed_volume": 3533107.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 21326,
+      "coverage": 0.9522831050228311,
+      "observed_volume": 3613802818.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 379,
+      "coverage": 0.9643835616438357,
+      "observed_volume": 556116504.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 4587,
+      "coverage": 0.9650684931506849,
+      "observed_volume": 3053607.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 21880,
+      "coverage": 0.9775114155251141,
+      "observed_volume": 3590669719.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 1605,
+      "coverage": 0.9598173515981735,
+      "observed_volume": 525175384.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 4153,
+      "coverage": 0.9547945205479452,
+      "observed_volume": 2444486.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 6332,
+      "coverage": 0.9795662100456621,
+      "observed_volume": 2581142374.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 24589,
+      "coverage": 0.9748858447488584,
+      "observed_volume": 500242148.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 4151,
+      "coverage": 0.9780821917808219,
+      "observed_volume": 2097142.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 8782,
+      "coverage": 0.9892694063926941,
+      "observed_volume": 2066022090.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 1607,
+      "coverage": 0.9504566210045662,
+      "observed_volume": 482873107.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 6585,
+      "coverage": 0.983675799086758,
+      "observed_volume": 1601917.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 440,
+      "coverage": 0.9705479452054795,
+      "observed_volume": 2001482520.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 225,
+      "coverage": 0.9700913242009133,
+      "observed_volume": 443749332.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 21902,
+      "coverage": 0.9748858447488584,
+      "observed_volume": 1521737.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 1515,
+      "coverage": 0.9720319634703196,
+      "observed_volume": 1956480671.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 3024,
+      "coverage": 0.9877853881278539,
+      "observed_volume": 418475018.0,
+      "liquidity_stratum": "medium"
+    },
+    {
+      "item_id": 6737,
+      "coverage": 0.9529680365296803,
+      "observed_volume": 1150803.0,
+      "liquidity_stratum": "low"
+    },
+    {
+      "item_id": 2353,
+      "coverage": 0.9848173515981735,
+      "observed_volume": 1829432643.0,
+      "liquidity_stratum": "high"
+    },
+    {
+      "item_id": 6685,
+      "coverage": 0.9824200913242009,
+      "observed_volume": 393131241.0,
+      "liquidity_stratum": "medium"
+    }
+  ],
+  "selected_ids": [
+    554,
+    1513,
+    391,
+    556,
+    383,
+    207,
+    565,
+    449,
+    5974,
+    555,
+    385,
+    24598,
+    562,
+    24607,
+    1511,
+    314,
+    8778,
+    12625,
+    12934,
+    11212,
+    12695,
+    21820,
+    536,
+    3051,
+    560,
+    2359,
+    22124,
+    566,
+    1391,
+    6016,
+    2,
+    1619,
+    5295,
+    561,
+    1603,
+    5300,
+    453,
+    1601,
+    11968,
+    892,
+    1617,
+    24251,
+    563,
+    8780,
+    10828,
+    564,
+    223,
+    11840,
+    444,
+    231,
+    4093,
+    2357,
+    2434,
+    4091,
+    21326,
+    379,
+    4587,
+    21880,
+    1605,
+    4153,
+    6332,
+    24589,
+    4151,
+    8782,
+    1607,
+    6585,
+    440,
+    225,
+    21902,
+    1515,
+    3024,
+    6737,
+    2353,
+    6685
+  ],
+  "availability_delay_seconds": 300,
+  "availability_status": "assumed bucket-end plus delay; not observed ingestion",
+  "source_interval_seconds": 300,
+  "source_interval_evidence": "sidecar timestamp_scale and raw bucket-index identity",
+  "source_files": [
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2024/month=10/data.parquet",
+      "bytes": 200481737,
+      "rows_footer": 14027161,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "a7b7281a6c714d693dd3438479419842b9fd1e89b4f2a39b7b6d22ec26833105",
+      "sidecar_sha256": "6ad2c446409cb71a793a33e145459d86c81a1c9449b61f3a11fe96138b086d4b",
+      "declared_payload_sha256": "c59b2cea76253854cefabf892fa3f9b1221e778c8dd39067fe71e519b4fbcd72",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2024/month=11/data.parquet",
+      "bytes": 188078777,
+      "rows_footer": 13190309,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "8e494feb7265dd6991696c9517d523ec24959d4dfba1b786a9ad8c30b13b1dd8",
+      "sidecar_sha256": "c069fa161d22be87afeadd41fddcf84a281723d1f174bc9003425a7666a563cd",
+      "declared_payload_sha256": "9812ec674373f020a392bd0043a3c5413d03cad26ec0f149073f8bda60ff2033",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2024/month=12/data.parquet",
+      "bytes": 171717967,
+      "rows_footer": 12205766,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "2ea876dad7951bbe0975964194e51a1ff76477c7d605c6da231495968f5a9883",
+      "sidecar_sha256": "3ad1019651a2f54f4397056f5ca50504ce07879c3d8716f4b34aaf376ef9e3ac",
+      "declared_payload_sha256": "875a6f85673a28067a7e24c2120bc633cdc6b69b5a72715f9342b534e85ea02d",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2025/month=01/data.parquet",
+      "bytes": 187453592,
+      "rows_footer": 13331427,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "9525efc1a98451f135e9ee7eaffb04334f35257a066b6e0ecca369c779f8946f",
+      "sidecar_sha256": "9077fc26a4abfc717aac0f16ef173c8f1cc589d9a10f2bfd5df85163ae609336",
+      "declared_payload_sha256": "544085d786ba22593a6b25ebc91ba09b4899a17feed304fce9ada1fc4ea2f730",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2025/month=02/data.parquet",
+      "bytes": 178821630,
+      "rows_footer": 12382209,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "ec8f6a4b16608673aa8f5a333ea39a9f220456464187cb05b0e045fbba9b082a",
+      "sidecar_sha256": "ffd19c88e01e981bcf7548ba5cf448e2ca57d925c41ecb29b1320a8121337617",
+      "declared_payload_sha256": "17518b60734512196a807a658ca38d9b7ab0192b6d71d6b0fdc787f7c65cc467",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2025/month=03/data.parquet",
+      "bytes": 193990363,
+      "rows_footer": 13666155,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "bea753fad8ef283fcf81c64208d4dd2dfd5846ab2f7287b843aa2e419e4a02f9",
+      "sidecar_sha256": "ab0c0e3bebf0863b9e429153c91494d38d8eaec06d570636be590fd6ffb075b5",
+      "declared_payload_sha256": "f1fbc0fb01606d77009d13090c20819f00677cffd44c95cf0478f8efad3f95bf",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2025/month=04/data.parquet",
+      "bytes": 185655395,
+      "rows_footer": 13106316,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "5242dc9d54f829ea97bc6cf6ac2872fa816050ae17f1ef9b0fe15db79a983a31",
+      "sidecar_sha256": "d67554c4559b000dbfcbf21d13c3ef88c47a280b90e75e16c0773dc81b6c25f1",
+      "declared_payload_sha256": "65e5763fa4302c8bfcca9c946dcc1960388dbbf92c897e8a1e4c87e63a077f26",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2025/month=05/data.parquet",
+      "bytes": 203151431,
+      "rows_footer": 14025676,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "baba30e701c3777a285e60b9348b155a975114556fed81f102f1f68976b4d5d2",
+      "sidecar_sha256": "594a31b1c80587d14a4f6556cb4a3ba8b572778e9a614c179f2b21ca844edf69",
+      "declared_payload_sha256": "db06192c75d734691c49fa196c20ec8ea1f4175375c0f0042dfb792d837b8e62",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2025/month=06/data.parquet",
+      "bytes": 199734697,
+      "rows_footer": 13680345,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "d2d38b9238a13f509e9115066b243b204496c8f7127bdc5864cacb883a21f207",
+      "sidecar_sha256": "3a8d44777c16d8d816053a9bc6b0246d3196666ba65b2956d9d7aacb96ea0a92",
+      "declared_payload_sha256": "1c4c96c2e10caf042ae357f7fce341c8bb46fe2e6ca142ee0015764485686982",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2025/month=07/data.parquet",
+      "bytes": 224597622,
+      "rows_footer": 15319988,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "b305c4378fa6b250a064bd7bc573ed23387845de1cb1df80989c101a3f53e04e",
+      "sidecar_sha256": "aaccf827e8295e73434e81c5b79c3649fb320975a39b428e9e675bc761d0e825",
+      "declared_payload_sha256": "8b369056b927a2396bd959b575898456579b4f4a53f355a8a0aedbeec7e6b956",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2025/month=08/data.parquet",
+      "bytes": 240316538,
+      "rows_footer": 16159156,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "92de9e63143ccf91d85fd9a071d40b86dbadc90714f4638d63abefca0f3348f0",
+      "sidecar_sha256": "a963074fdf99a80751758d0408b13689bedf6f60c280bf157454faa568c2151f",
+      "declared_payload_sha256": "2141141f53cb658b5c9e39ea1ed9ae8a6286b7b698dcf50666848deb381d3ced",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2025/month=09/data.parquet",
+      "bytes": 223034492,
+      "rows_footer": 15121614,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "5a45a0d99987cc5cfc9c30ae6e7c6cdf052887fac21dade84cda5ed7d8900689",
+      "sidecar_sha256": "deae8c8b41c5128f53f6fb0812472e446e9c0497cf080214401c4dfabe7d73ac",
+      "declared_payload_sha256": "122e3033fee02f566bdcc5cc466256f81a165bf17fb86a4852c32f6f2acd5895",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2025/month=10/data.parquet",
+      "bytes": 208895225,
+      "rows_footer": 14394554,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "0d59f7b2bd297629370f2e82db2d82776db428eb02fa5b0aedd0555536517771",
+      "sidecar_sha256": "d6ca62eb15627eba24ef66ee36a89c6cf431142cbcfa4b830c5ebef8994875a5",
+      "declared_payload_sha256": "b4b687ccdfac5aee39554e7c40b5dc9b493bfbe6650a6d90d77abad9ab96f8a5",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2025/month=11/data.parquet",
+      "bytes": 200362727,
+      "rows_footer": 13557487,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "c7b9238f4a35cb12c7ea4b2f33017e1ea997417ba68b107e4b9d712918279dc7",
+      "sidecar_sha256": "90049552d73377da2bcf65546958f914464bc7826384b91bdb4bac027309b627",
+      "declared_payload_sha256": "d4f78d62fcfb479fd140f81ab7484b0634de2fbe36c36a76b30bfc9df50d4f1e",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2025/month=12/data.parquet",
+      "bytes": 222611984,
+      "rows_footer": 14883469,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "b02e09aa7078aabff86510339dd5f88d6ee79a3e5fa0ba90b63730f772a04f4e",
+      "sidecar_sha256": "2d1c5b2709b124becb02360fa0c4ce5fbeebf51339063600e6911f94e2c81306",
+      "declared_payload_sha256": "d868cd82457ab1bbc66ce7e5741aac8e876430d85346e0761a9e866c4d950030",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2026/month=01/data.parquet",
+      "bytes": 235565270,
+      "rows_footer": 15898043,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "73da6e217e4ffdfbe58d4396b3f8e0b3bfc23578a86eff018859221be190923d",
+      "sidecar_sha256": "5faa2a5759041d4f37d233b6c420bd38d6902690ff613126db42eeaacc5ff96f",
+      "declared_payload_sha256": "6375be4b3372cb556862ec5a44b170f676f06a71e403ee228551d6c6b489f9e2",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2026/month=02/data.parquet",
+      "bytes": 195528709,
+      "rows_footer": 13449383,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "0a30c195e553d5d397033dcc5ee0b15dfcdd1c45bbabb2df0e7afba387be110f",
+      "sidecar_sha256": "38769e24c7c7d5f3f0820882306aec75f11cab83cec1266cd8ca53be32deb759",
+      "declared_payload_sha256": "7252464115f8ac3c955e2728f0d5521633df14b8220db0a20e389639d7c7be8a",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2026/month=03/data.parquet",
+      "bytes": 209160730,
+      "rows_footer": 14630761,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "c0cfe19a68f454143bb962e122a7d7715ac0dcb0303a855c50825bdbdad0a445",
+      "sidecar_sha256": "dd5313d1d1432bac346ba250980d777bd5b3532b30b7eb7ad95810f1e0600c2b",
+      "declared_payload_sha256": "03deff19160274fdf78e5fdcbb20ed68b949ab87de0fce7aebb09e40b7e14779",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2026/month=04/data.parquet",
+      "bytes": 173847851,
+      "rows_footer": 12622218,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "fedc3141904794fdd9a3b928df5ac403cd9101908957f419392a0c6d34c81c97",
+      "sidecar_sha256": "d66a07b882a9815cdc790c4f3d208eed03c0f4858eac0b1a7eab4cd0e786c0a2",
+      "declared_payload_sha256": "40a5fe0b24fd4e6b8a394732918497bfcf4f0bb77e4ca75b79b4e929964cbf4c",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2026/month=05/data.parquet",
+      "bytes": 175782677,
+      "rows_footer": 12573815,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "c16149d35ef0b28ed3c3c5327dae0452ae1fb634019b02855c64a123a1ffcaec",
+      "sidecar_sha256": "3aa267a9750641083c58e1bf0b7b7d87c2872aff2c30e0d9c90b7ba411c00d51",
+      "declared_payload_sha256": "d3fb23ce78f7bb8f585508a2b06b8e71c0ba7b0b319cbc1d24e47df9982814a5",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2026/month=06/data.parquet",
+      "bytes": 179226880,
+      "rows_footer": 12857213,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "9d584151d05a3e5e728e86a0fbd0c216d4d8dd99e7de34751611810b5d82ea5d",
+      "sidecar_sha256": "4c63771833328f72e5a24c15205766eee3d4a8dff73ed1442e93f31c549f0d55",
+      "declared_payload_sha256": "3234fd9ea1111c4a4084569fe002664170097989450fa1ece21408b5e754a9e7",
+      "payload_hash_verified": false
+    },
+    {
+      "path": "/home/martin/osrs-data/sources/kaggle-5m/canonical-v2/main/prices_5m/year=2026/month=07/data.parquet",
+      "bytes": 196289478,
+      "rows_footer": 13995794,
+      "schema": "itemId: int32\ntimestamp: int32\navgLowPrice: int32\navgHighPrice: int32\nlowPriceVolume: int32\nhighPriceVolume: int32\nitem_id: int64\nname: string\nts: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\ntotal_volume: int64\nsource: string\neconomy: string",
+      "schema_sha256": "de9d58aec082d2d48a034744b6eab296229ca4c6633a73bb6f8ec5694659a835",
+      "footer_sha256": "db5e76f2ee5c761f7323a5394451e360da49f1b8856af80f54eaf586f6919f78",
+      "sidecar_sha256": "928af7681df050a7d52246bdae035002f28a3a04b03d57a9d2772bbf7d9417e1",
+      "declared_payload_sha256": "c4ea2b89ef4d6aa630470705a38eccefd3e069a1d7564c0b73538df44410f89f",
+      "payload_hash_verified": false
+    }
+  ],
+  "selection_source_rows": 166533346,
+  "selected_development_source_rows": 13464284,
+  "schema": "ts: int64\nitem_id: int64\navg_high_price: double\navg_low_price: double\nhigh_price_volume: int64\nlow_price_volume: int64\nmid_price: double\navailable_at: int64\nusable: bool",
+  "sha256": "5a5bf0fa4d656b24b4df5883804fbb32068e5c0262924c3d51ccffe93af321a8",
+  "quality": {
+    "rows": 1127760,
+    "usable_rows": 1086789,
+    "unknown_high_volume_hours": 19976,
+    "unknown_low_volume_hours": 19976,
+    "zero_high_volume_hours": 412,
+    "zero_low_volume_hours": 398,
+    "inverted_side_hours": 20555,
+    "min_ts": 1730160000,
+    "max_ts": 1785020400
+  },
+  "gates": {
+    "duplicate_keys": "passed: zero duplicates in scanned scopes",
+    "development_only": true,
+    "source_identity_timestamp": "passed",
+    "selection_frozen_first_training": true,
+    "complete_hour_required": true,
+    "rights": "private research only; broad reuse unresolved",
+    "as_of_timing": "assumed latency, not empirically established"
+  },
+  "missingness_policy": "12 distinct 300s rows required; no interpolation; unknown totals NULL; observed complete zero volume stays zero",
+  "survivorship_limit": "canonical-v2/main uses current listed-item classification"
+}

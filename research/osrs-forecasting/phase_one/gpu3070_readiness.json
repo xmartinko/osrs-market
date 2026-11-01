@@ -1,0 +1,1 @@
+{"host": "thinkpad", "torch": "2.8.0+cu128", "cuda": "12.8", "gpu": "NVIDIA GeForce RTX 3070 Laptop GPU", "capability": [8, 6], "compiled_architectures": ["sm_70", "sm_75", "sm_80", "sm_86", "sm_90", "sm_100", "sm_120"], "synthetic_backward_and_sampling": "passed", "optimizer_steps": 0, "peak_cuda_memory_bytes": 31193600}
