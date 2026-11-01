@@ -1,0 +1,16 @@
+{
+  "reviewed_at_utc": "2026-11-01T07:55:48.759507+00:00",
+  "attempts_so_far": 3,
+  "preoptimization_failures": 2,
+  "completed_fits": 1,
+  "completed_run": "p02_lowrank_5080_r1",
+  "measured_elapsed_seconds": 7.144358396530151,
+  "measured_peak_cuda_bytes": 152175616,
+  "measured_peak_host_rss_kib": 2232092,
+  "decision": "Continue the remaining two originally specified pilot families. These limits fit existing memory/time allowances; no full campaign launch authorized by this review.",
+  "next_dispatch": "Run p01_diag_3070_r1 concurrently with p03_spline_5080. The previous3070retry launcher exited before creating its run directory, so it performed no fit. Spline now follows completed5080lowrank as originally specified.",
+  "changes_to_models_targets_or_step_limits": false,
+  "planned_total_attempts_after_pilots": 5,
+  "remaining_full_campaign_fit_slots_if_all_complete": 67,
+  "interpretation": "Resource feasibility only. The one pilot score comparison is not evidence for model selection or significance. Full baseline and registered evaluation remain outstanding."
+}
