@@ -1,0 +1,5 @@
+# Research environment changelog
+
+- 2026-11-01: After user approval, created isolated research environments on desktop WSL Ubuntu-24.04 (/home/xmart/osrs-research) and ThinkPad (/home/martin/osrs-research, existing root SSH route). Installed CPython 3.13.13 / PyTorch 2.8.0+cu128 with pinned research dependencies. Both GPU architectures passed CUDA checks and independent training ran concurrently. No system drivers, production services, BIOS, networking, k3s, suspend protections or monitoring were changed.
+- 2026-11-01: Preserved the derived development panel and all five attempt directories under /home/martin/osrs-data/phase-one-20261101, with GPU-node and local artifact copies. Existing source archives and the sealed holdout were unchanged. This is an experiment-artifact replication step, not a general homelab backup regime.
+- 2026-11-01: Updated /home/martin/homelab-overview.md with research environment paths, operating-account caveat and a dated changelog. A pre-change copy was retained beside it. No automatic full-campaign scheduler was installed; the three pilot jobs are complete.

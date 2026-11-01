@@ -1,0 +1,1 @@
+{"source_run": "p01_diag_3070_r1", "source_gpu": "RTX3070Laptop", "destination": "desktopWSL2CPU", "map_location": "cpu", "model_load_and_sampling": "passed", "sample_shape": [2, 8, 24], "optimizer_steps": 0}

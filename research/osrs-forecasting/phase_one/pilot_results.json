@@ -1,0 +1,269 @@
+{
+  "recorded_at_utc": "2026-11-01T07:58:45.294870+00:00",
+  "stage": "bounded pilot only",
+  "source_panel_sha256": "5a5bf0fa4d656b24b4df5883804fbb32068e5c0262924c3d51ccffe93af321a8",
+  "completed_fits": [
+    {
+      "id": "p01_diag_3070_r1",
+      "status": "completed",
+      "model": "gaussian_diag",
+      "gpu": "NVIDIA GeForce RTX 3070 Laptop GPU",
+      "code_commit": "bca7dfb3abaf9bdef351b482c9c1c9dc4afafbfb",
+      "elapsed_seconds": 20.42851495742798,
+      "peak_cuda_memory_bytes": 152075264,
+      "peak_host_rss_kib_linux": 1945432,
+      "steps_completed": 256,
+      "training_origins": 20000,
+      "training_eligible_origins": 383704,
+      "validation_origins": 512,
+      "validation_eligible_origins": 106672,
+      "metrics": {
+        "model": {
+          "energy": 0.09303273223865452,
+          "variogram_p05": 1.6122110550380069,
+          "crps_h1": 0.006859942784911788,
+          "wis_h1": 0.005773746672978546,
+          "coverage90_h1": 0.927734375,
+          "width90_h1": 0.04472454302993475,
+          "crps_h4": 0.011299565721378677,
+          "wis_h4": 0.009777702321803854,
+          "coverage90_h4": 0.931640625,
+          "width90_h4": 0.08541792809199933,
+          "crps_h24": 0.02228353906156524,
+          "wis_h24": 0.019430752258772933,
+          "coverage90_h24": 0.9765625,
+          "width90_h24": 0.20913730293906455,
+          "normalized_nll_per_increment": 1.8539972978178412
+        },
+        "gaussian_rw": {
+          "energy": 0.09190527163251748,
+          "variogram_p05": 1.5561683550068388,
+          "crps_h1": 0.006855452203607995,
+          "wis_h1": 0.005785679305253249,
+          "coverage90_h1": 0.896484375,
+          "width90_h1": 0.04108651322233549,
+          "crps_h4": 0.011331532995585144,
+          "wis_h4": 0.009810390057554817,
+          "coverage90_h4": 0.919921875,
+          "width90_h4": 0.08188769194309019,
+          "crps_h24": 0.02180630691217607,
+          "wis_h24": 0.019048462587053207,
+          "coverage90_h24": 0.96484375,
+          "width90_h24": 0.20044850314066462
+        },
+        "no_change": {
+          "energy": 0.10671581086169388,
+          "variogram_p05": 4.4164826746570505,
+          "crps_h1": 0.008994048246091686,
+          "wis_h1": 0.008994048246091688,
+          "coverage90_h1": 0.001953125,
+          "width90_h1": 0.0,
+          "crps_h4": 0.013975175348661974,
+          "wis_h4": 0.013975175348661974,
+          "coverage90_h4": 0.0,
+          "width90_h4": 0.0,
+          "crps_h24": 0.0237308908253266,
+          "wis_h24": 0.023730890825326593,
+          "coverage90_h24": 0.0,
+          "width90_h24": 0.0
+        }
+      },
+      "progress_interior_interval_unix": [
+        1793519777.64628,
+        1793519779.545575
+      ],
+      "artifact_hashes": {
+        "environment.txt": "f20526c4289758a9d5347083d69edf9991e5dcbf631427b8bf89933ddd5f0a46",
+        "metadata.json": "fa9017d36cb92e49c2fe523999abdc657d2d84352284878726f04b8a3922f55c",
+        "origins.npz": "8bd9cbc78163abb80fdbfcad4f7485e7c9773461a60b56c459e7dfd380856d69",
+        "progress.jsonl": "c096e9b46ed532a2b3102349e213ee2f3322f65c21e8f242c30ca23220c16ae3",
+        "metrics.json": "c36a3fce5af8ecad5037cbc85a69c437aeecad90eb3adec61df8e40691469bd8",
+        "origin_metrics.json": "97369c8bb1bfbe2cfedf58c5ac220e45e9962a2e398b999d664d22628499a693",
+        "checkpoint.pt": "ce9d289530eeb9dc9e6a3484cea507af10ad98ced821d9561a147890e29aad7a"
+      }
+    },
+    {
+      "id": "p02_lowrank_5080_r1",
+      "status": "completed",
+      "model": "gaussian_lowrank",
+      "gpu": "NVIDIA GeForce RTX 5080",
+      "code_commit": "bca7dfb3abaf9bdef351b482c9c1c9dc4afafbfb",
+      "elapsed_seconds": 7.144358396530151,
+      "peak_cuda_memory_bytes": 152175616,
+      "peak_host_rss_kib_linux": 2232092,
+      "steps_completed": 256,
+      "training_origins": 20000,
+      "training_eligible_origins": 383704,
+      "validation_origins": 512,
+      "validation_eligible_origins": 106672,
+      "metrics": {
+        "model": {
+          "energy": 0.09173437422359146,
+          "variogram_p05": 1.5358308933902596,
+          "crps_h1": 0.006854737247352824,
+          "wis_h1": 0.005795117542208674,
+          "coverage90_h1": 0.912109375,
+          "width90_h1": 0.043634528194650475,
+          "crps_h4": 0.011256846640332888,
+          "wis_h4": 0.00970424709429975,
+          "coverage90_h4": 0.931640625,
+          "width90_h4": 0.0840283521206954,
+          "crps_h24": 0.02207155149894258,
+          "wis_h24": 0.019217654960954674,
+          "coverage90_h24": 0.970703125,
+          "width90_h24": 0.2027091545138559,
+          "normalized_nll_per_increment": 1.8447883038315922
+        },
+        "gaussian_rw": {
+          "energy": 0.09190527163251748,
+          "variogram_p05": 1.5561683550068388,
+          "crps_h1": 0.006855452203607995,
+          "wis_h1": 0.005785679305253249,
+          "coverage90_h1": 0.896484375,
+          "width90_h1": 0.041086513222335495,
+          "crps_h4": 0.011331532995585144,
+          "wis_h4": 0.009810390057554817,
+          "coverage90_h4": 0.919921875,
+          "width90_h4": 0.08188769194309019,
+          "crps_h24": 0.02180630691217607,
+          "wis_h24": 0.019048462587053207,
+          "coverage90_h24": 0.96484375,
+          "width90_h24": 0.20044850314066462
+        },
+        "no_change": {
+          "energy": 0.10671581086169388,
+          "variogram_p05": 4.4164826746570505,
+          "crps_h1": 0.008994048246091686,
+          "wis_h1": 0.008994048246091688,
+          "coverage90_h1": 0.001953125,
+          "width90_h1": 0.0,
+          "crps_h4": 0.013975175348661974,
+          "wis_h4": 0.013975175348661974,
+          "coverage90_h4": 0.0,
+          "width90_h4": 0.0,
+          "crps_h24": 0.0237308908253266,
+          "wis_h24": 0.023730890825326593,
+          "coverage90_h24": 0.0,
+          "width90_h24": 0.0
+        }
+      },
+      "progress_interior_interval_unix": [
+        1793519678.130024,
+        1793519679.6677592
+      ],
+      "artifact_hashes": {
+        "progress.jsonl": "6992d7f7c1095855e04e2edb9c68a64f4ffe89fc7cc4446cad1b21eb1d73cc2d",
+        "origin_metrics.json": "01b5c5bb945c2de3d1b4f57da322d6ec3ffbb68f4d0eee9e99658d7485e81efc",
+        "checkpoint.pt": "aa487acdd2af0ddca5d93f5a8ad60c15b2270ddadd348dcef2971720638f5522",
+        "environment.txt": "f20526c4289758a9d5347083d69edf9991e5dcbf631427b8bf89933ddd5f0a46",
+        "metadata.json": "d2b41df32809562d6cf08009f1ff2b5060b99e6dab66f4ec1b585751847f4d9b",
+        "origins.npz": "8bd9cbc78163abb80fdbfcad4f7485e7c9773461a60b56c459e7dfd380856d69",
+        "metrics.json": "1243265111c24c65d485e1ffe441a3f24cbf5013753076fa0b61325c44e1a927"
+      }
+    },
+    {
+      "id": "p03_spline_5080",
+      "status": "completed",
+      "model": "spline_flow",
+      "gpu": "NVIDIA GeForce RTX 5080",
+      "code_commit": "bca7dfb3abaf9bdef351b482c9c1c9dc4afafbfb",
+      "elapsed_seconds": 22.0305917263031,
+      "peak_cuda_memory_bytes": 155125248,
+      "peak_host_rss_kib_linux": 2491716,
+      "steps_completed": 256,
+      "training_origins": 20000,
+      "training_eligible_origins": 383704,
+      "validation_origins": 512,
+      "validation_eligible_origins": 106672,
+      "metrics": {
+        "model": {
+          "energy": 0.08330548581368744,
+          "variogram_p05": 1.11141189729657,
+          "crps_h1": 0.006657475362192177,
+          "wis_h1": 0.005598712513863649,
+          "coverage90_h1": 0.849609375,
+          "width90_h1": 0.03455363565850043,
+          "crps_h4": 0.010407417980939138,
+          "wis_h4": 0.00889687461454112,
+          "coverage90_h4": 0.884765625,
+          "width90_h4": 0.060932343772818615,
+          "crps_h24": 0.019356351066417775,
+          "wis_h24": 0.016586007522721696,
+          "coverage90_h24": 0.88671875,
+          "width90_h24": 0.12670564267845008,
+          "normalized_nll_per_increment": 2.0270662603434175
+        },
+        "gaussian_rw": {
+          "energy": 0.09190527163251748,
+          "variogram_p05": 1.5561683550068388,
+          "crps_h1": 0.006855452203607995,
+          "wis_h1": 0.005785679305253249,
+          "coverage90_h1": 0.896484375,
+          "width90_h1": 0.041086513222335495,
+          "crps_h4": 0.011331532995585144,
+          "wis_h4": 0.009810390057554817,
+          "coverage90_h4": 0.919921875,
+          "width90_h4": 0.08188769194309019,
+          "crps_h24": 0.02180630691217607,
+          "wis_h24": 0.019048462587053207,
+          "coverage90_h24": 0.96484375,
+          "width90_h24": 0.20044850314066462
+        },
+        "no_change": {
+          "energy": 0.10671581086169388,
+          "variogram_p05": 4.4164826746570505,
+          "crps_h1": 0.008994048246091686,
+          "wis_h1": 0.008994048246091688,
+          "coverage90_h1": 0.001953125,
+          "width90_h1": 0.0,
+          "crps_h4": 0.013975175348661974,
+          "wis_h4": 0.013975175348661974,
+          "coverage90_h4": 0.0,
+          "width90_h4": 0.0,
+          "crps_h24": 0.0237308908253266,
+          "wis_h24": 0.023730890825326593,
+          "coverage90_h24": 0.0,
+          "width90_h24": 0.0
+        }
+      },
+      "progress_interior_interval_unix": [
+        1793519766.666974,
+        1793519781.6466053
+      ],
+      "artifact_hashes": {
+        "progress.jsonl": "b57da55633e27d89ddba563bd6e1a0811974e0eb16d4844646fca6a3bb6d3eb2",
+        "origin_metrics.json": "86d65868ed6bfed5951be5cf514f8f63faab6d2da4c1e235b29244714f5b1626",
+        "checkpoint.pt": "e2e7571164b88504c28d2d5a0a9248073f7683e71ac61db572a20228b92843ee",
+        "environment.txt": "f20526c4289758a9d5347083d69edf9991e5dcbf631427b8bf89933ddd5f0a46",
+        "metadata.json": "ced7fc6aefb769e4cd68acb2ae92a7d5bc37d4490839bee17c6c67eb3714a0bd",
+        "origins.npz": "8bd9cbc78163abb80fdbfcad4f7485e7c9773461a60b56c459e7dfd380856d69",
+        "metrics.json": "1b23a2030bce1ebe1522dbd5f1035ecf52e8c2d2a19ef81e66fae6989792f4b0"
+      }
+    }
+  ],
+  "failed_attempts": [
+    {
+      "id": "p01_diag_3070",
+      "status": "failed",
+      "optimizer_steps": 0,
+      "error": "Expected a torch.device with a specified index or an integer, but got:cuda",
+      "elapsed_seconds": 7.639988899230957
+    },
+    {
+      "id": "p02_lowrank_5080",
+      "status": "failed",
+      "optimizer_steps": 0,
+      "error": "Expected a torch.device with a specified index or an integer, but got:cuda",
+      "elapsed_seconds": 2.4459826946258545
+    }
+  ],
+  "fit_attempts_consumed": 5,
+  "remaining_maximum_fit_slots": 67,
+  "concurrent_optimizer_loop_overlap_seconds": 1.8992948532104492,
+  "overlap_caveat": "Wall clocks are assumed synchronized across nodes; overlap is from first and last optimizer-step progress timestamps. It does not measure GPU kernel utilization.",
+  "paired_origin_indices_identical": true,
+  "installed_environment_freezes_identical": true,
+  "all_artifact_hashes_verified": true,
+  "raw_artifacts": "VPS /home/martin/osrs-data/phase-one-20261101/runs; copies on each GPU node and Windows osrs-phase-one-tools/results. No raw panel, checkpoint or per-origin rows published toGit.",
+  "scientific_claims": "No confirmatory comparisons or economic claims. Sampled complete-target cohort, origin-weighted unscaled aggregate-return scores, limited baselines and one short optimization budget."
+}

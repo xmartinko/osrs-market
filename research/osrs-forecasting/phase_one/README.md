@@ -2,6 +2,8 @@
 
 The user approved the Phase Zero proposal and simultaneous use of the RTX 3070 and RTX 5080. This stage runs independent jobs, one per GPU. It does not pool VRAM, use heterogeneous DDP, access the sealed holdout, execute trades or change production services.
 
+**Milestone update:** all three pilots completed after a CUDA device-index fix, with two failed pre-optimization attempts retained. The successful 3070 Gaussian and 5080 spline jobs ran concurrently. There are now 40 passing tests. Read [measured results](pilot_results.md), [budget accounting](pilot_budget_review.json) and [current handoff](HANDOFF.md). The original protocol below records the initial plan; amendments and actual execution are preserved separately. No jobs remain active and the full campaign has not launched.
+
 ## Actual data gate
 
 The pipeline read existing canonical main-economy mirror partitions and wrote a new derived panel outside the source tree. Item selection uses only 2024-10-29 through 2025-10-29. Later development data ends strictly before 2026-07-26 00:00 UTC; the original reserved holdout begins at Unix 1785024300. Source files and existing datasets remain unchanged.
@@ -26,6 +28,6 @@ Historical publication delay remains an assumption, and source classification us
 
 Both nodes have isolated CPython 3.13.13 environments with PyTorch 2.8.0+cu128. The build includes both sm_86 and sm_120. The 5080 passed all four model heads' synthetic forward/backward/sampling checks; the 3070 passed a representative synthetic GRU/Gaussian backward/sampling check. These checks performed no optimizer steps or market-data training.
 
-All 39 new tests passed, including weighted aggregation, duplicate/holdout guards, source and output checksums, likelihood/covariance references, flow round trips, proper scores, causal normalization, missing-label handling and temporal purging. Model pilots have no silent CPU fallback and cap CUDA allocations at 75% of the device, with four CPU threads per job. All results must retain the code revision, panel hashes, environment, origin indices and fit status.
+The initial 39 tests passed; the added CUDA device-index regression brings the passing total to 40. Coverage includes weighted aggregation, duplicate/holdout guards, source and output checksums, likelihood/covariance references, flow round trips, proper scores, causal normalization, missing-label handling and temporal purging. Model pilots have no silent CPU fallback and cap CUDA allocations at 75% of the device, with four CPU threads per job. All results retain the code revision, panel hashes, environment, origin indices and fit status.
 
 See [environment.md](environment.md) for installation provenance and node paths, [execution_plan.md](execution_plan.md) for scheduling, and the eventual pilot results for measured runtime and memory. Test and smoke results establish implementation readiness only.
