@@ -1,0 +1,184 @@
+{
+  "protocol_id": "OSRS_PHASE_ONE_P1_ECONOMIC_BACKTEST",
+  "preregistered_at_local": "2026-11-01T11:16:00-08:00",
+  "branch": "research/osrs-phase-one-2026-11-01",
+  "experiment_type": "development_validation_economic_backtest_not_E4",
+  "e4_slots_consumed": 0,
+  "protected_holdout_start": 1785024300,
+  "holdout_access_permitted": false,
+  "inputs": {
+    "panel_parquet_sha256": "5a5bf0fa4d656b24b4df5883804fbb32068e5c0262924c3d51ccffe93af321a8",
+    "panel_manifest_sha256": "6b4f501c4bf54c33df386caf5f4e46679d9273bddaf3cb6dc6ed967b32d9754f",
+    "items_metadata_parquet_sha256": "f45db02de79e91b86fd03dc7ea0a5cd0cf00a9558a1040ab3a32b4e283a860f4",
+    "selected_model": "recursive_student_t",
+    "model_selection_basis": "Sole E2 candidate clearing preregistered Gate B (3-fold unbiased variogram 92.90 = -6.40% <= 94.28, primary scaled CRPS 1.1507 = -0.86%, 90% coverage 89.4%/89.6%/88.8%)",
+    "frozen_checkpoints": {
+      "1": [
+        "e2_recursive_student_t_f1_s11",
+        "e2_recursive_student_t_f1_s23",
+        "e2_recursive_student_t_f1_s47"
+      ],
+      "2": [
+        "e2_recursive_student_t_f2_s11",
+        "e2_recursive_student_t_f2_s23",
+        "e2_recursive_student_t_f2_s47"
+      ],
+      "3": [
+        "e2_recursive_student_t_f3_s11",
+        "e2_recursive_student_t_f3_s23",
+        "e2_recursive_student_t_f3_s47"
+      ]
+    },
+    "samples_per_seed": 256,
+    "pooled_samples_per_origin": 768,
+    "causal_origin_eligibility": "All hourly origins with history >= 168h and current-bucket usable == True and positive high/low volumes (never conditioned on future complete_24h target survival)"
+  },
+  "reused_machinery": {
+    "costs_module": "osrs_ml.costs",
+    "execution_module": "osrs_ml.execution",
+    "backtest_module": "osrs_ml.backtest",
+    "parallel_cost_model_prohibited": true,
+    "tax_policy": {
+      "class": "TaxPolicy",
+      "rate_bps": 200,
+      "exempt_through_gp": 49,
+      "cap_gp": 5000000,
+      "exempt_item_ids_primary": [],
+      "exempt_item_ids_sensitivity": [
+        379
+      ]
+    },
+    "primary_execution_assumptions": {
+      "name": "p1_crossed_moderate_200bps",
+      "passive_prices": false,
+      "fill_model": "bucket_proxy_v1",
+      "price_model": "integer_lots_v2",
+      "participation_bps": 200,
+      "queue_fill_bps": 10000,
+      "slippage_bps": 10,
+      "adverse_ticks": 0,
+      "latency_seconds": 300,
+      "max_freshness_seconds": 7500,
+      "freshness_basis": "upper_bound",
+      "buy_timeout_seconds": 7500,
+      "terminal_haircut_bps": 100,
+      "allow_unknown_metadata": false
+    },
+    "secondary_execution_sensitivities": {
+      "participation_bps_variants": [
+        50,
+        200,
+        500
+      ],
+      "passive_limit_contrast": {
+        "name": "p1_passive_v3_200bps",
+        "passive_prices": true,
+        "fill_model": "volume_bounded_v3",
+        "volume_qualification": "mean_proxy",
+        "price_model": "integer_lots_v2",
+        "participation_bps": 200,
+        "queue_fill_bps": 10000,
+        "slippage_bps": 10,
+        "adverse_ticks": 0,
+        "latency_seconds": 300,
+        "max_freshness_seconds": 7500,
+        "freshness_basis": "upper_bound",
+        "buy_timeout_seconds": 11100,
+        "terminal_haircut_bps": 100,
+        "allow_unknown_metadata": false
+      }
+    },
+    "hourly_price_conversion_for_integer_lots_v2": "avg_high_price_gp = max(1, round(avg_high_price)), avg_low_price_gp = max(1, round(avg_low_price)) for non-null positive prices; null/zero-volume preserved as NA"
+  },
+  "policy_specification": {
+    "predictive_quantiles_used": {
+      "horizons_hours": [
+        1,
+        4,
+        24
+      ],
+      "tau_levels": [
+        0.1,
+        0.25,
+        0.5,
+        0.75,
+        0.9
+      ]
+    },
+    "expected_net_edge_formula": {
+      "estimated_buy_gp": "ceil(ask_t * exp(max(0.0, q50_h1)) * 1.0010)",
+      "estimated_sell_gp_at_tau": "max(1, floor(bid_t * exp(q_tau_H) * 0.9990))",
+      "expected_net_return": "mean over tau in {0.10, 0.25, 0.50, 0.75, 0.90} of costs.net_return(estimated_buy_gp, estimated_sell_gp_at_tau, DEFAULT_TAX)"
+    },
+    "entry_conditions": [
+      "usable_t == True, not inverted_spread, high_price_volume > 0, low_price_volume > 0, present(buy_limit)",
+      "expected_net_return(H) > min_net_edge_bps / 10000.0",
+      "median_net_return_at_q50(H) > 0.0",
+      "h=1 crash & fillability gate: -0.05 < q10_h1 <= 0.005",
+      "cross-horizon trajectory gate: q50_h24 >= 0.0 when H=4; q50_h4 >= -0.01 when H=24",
+      "end-of-fold completion buffer: available_at < fold_end - (H + 3) * 3600"
+    ],
+    "ranking_score": "expected_net_return(H) / max(q75_H - q25_H, 0.005)",
+    "exit_rule": "backtest.simulate causal hold timer: sell order submitted at first_fill + H * 3600 seconds (H in {4, 24}), executed across post-latency buckets subject to participation_bps volume cap",
+    "position_sizing_and_capital": {
+      "primary_initial_cash_gp": 100000000,
+      "sensitivity_initial_cash_gp": 10000000,
+      "offer_slots": 8,
+      "max_slot_allocation_bps": 1250,
+      "min_slot_allocation_bps": 100,
+      "dynamic_allocation_bps_formula": "clip(floor(1250 * min(1.0, expected_net_return / 0.01) * min(1.0, 0.02 / max(iqr_H, 0.005))), 100, 1250)",
+      "four_hour_buy_limit_enforcement": "backtest.simulate per-item 14400s window starting at first buy fill, capped at items.parquet buy_limit (73 known, 1 unknown forbidden)"
+    }
+  },
+  "training_only_tuning_grid": {
+    "grid_dimensions": {
+      "holding_hours": [
+        4,
+        24
+      ],
+      "min_net_edge_bps": [
+        0,
+        25,
+        50
+      ]
+    },
+    "total_cells": 6,
+    "tuning_window_per_fold": "Contiguous 21-day (504h) pre-validation inner window [val_start - 21*86400, val_start) strictly inside each fold training period, held out of gradient updates by split_inner_train_val",
+    "selection_criterion": "Maximize inner-training net_gp on primary_execution_assumptions (tie-breaker: lower turnover, then larger holding_hours, then larger min_net_edge_bps)",
+    "anti_overfit_reporting_rule": "Every single cell of the 6-cell grid MUST be evaluated and reported on outer validation folds (1, 2, 3 and pooled 270d) regardless of whether it wins or loses; zero post-hoc threshold edits permitted"
+  },
+  "null_controls": [
+    {
+      "control_id": "null_time_shuffled",
+      "description": "Circular/block time-permutation (5 deterministic shifts/replicates, block=168h) of predicted quantile vectors within each (fold, item) before computing expected_net_edge against true current ask_t/bid_t; preserves marginal signal distribution while destroying conditional timing"
+    },
+    {
+      "control_id": "null_sign_flipped",
+      "description": "Inverts predicted return direction (q_tau_h -> -q_{1-tau, h}) at every origin while preserving exact dispersion and current ask_t/bid_t"
+    },
+    {
+      "control_id": "null_detrended_zero_drift",
+      "description": "Subtracts predicted median drift at every horizon (q_tau_h -> q_tau_h - q50_h), isolating pure dispersion/skew against the cost wall"
+    }
+  ],
+  "evaluation_windows": {
+    "fold_1": {
+      "start_utc": "2025-10-29T00:00:00Z",
+      "end_utc": "2026-01-27T00:00:00Z",
+      "start_unix": 1761696000,
+      "end_unix": 1769472000
+    },
+    "fold_2": {
+      "start_utc": "2026-01-27T00:00:00Z",
+      "end_utc": "2026-04-27T00:00:00Z",
+      "start_unix": 1769472000,
+      "end_unix": 1777248000
+    },
+    "fold_3": {
+      "start_utc": "2026-04-27T00:00:00Z",
+      "end_utc": "2026-07-26T00:00:00Z",
+      "start_unix": 1777248000,
+      "end_unix": 1785024000
+    }
+  }
+}
