@@ -1,14 +1,17 @@
 {
-  "reconciled_at_utc": "2026-11-01T08:23:00+00:00",
+  "reconciled_at_utc": "2026-11-01T15:06:00+00:00",
   "repository_branch": "research/osrs-phase-one-2026-11-01",
   "base_commit_before_stage": "310b96f6d408b82296f9f030d519232be12c63e5",
   "pilot_fit_code_commit": "bca7dfb3abaf9bdef351b482c9c1c9dc4afafbfb",
+  "e2_fit_code_commit": "52e18603e631bd4ba79ce1621f1145b076f8f912",
+  "e3_fit_code_commit": "559cc9e9ed09d9502c73131640eba5a6eb282e34",
   "panel_sha256": "5a5bf0fa4d656b24b4df5883804fbb32068e5c0262924c3d51ccffe93af321a8",
+  "e2_e3_archive_manifest_sha256": "5452b391892eaa4f6524addbd10cff59e6eecaa68d2b37fd6e3af261e225408a",
   "protected_holdout_start": 1785024300,
   "neural_fit_budget": {
     "approved_maximum_fits": 72,
     "consumed_pilot_attempts": 5,
-    "consumed_breakdown": [
+    "consumed_pilot_breakdown": [
       {
         "slot": 1,
         "run_id": "p01_diag_3070",
@@ -61,28 +64,40 @@
       }
     ],
     "consumed_e1_baseline_neural_slots": 0,
-    "remaining_neural_fit_slots": 67,
-    "reserved_future_campaign_plan": {
-      "status": "authorized_e2_e4_campaign_launching",
-      "max_e2_architecture_fits": 54,
-      "e2_architecture_structure": "6 neural configurations (gaussian_diag, student_t, gaussian_lowrank, direct_marginal_student_t, recursive_student_t, spline_flow campaign_v3) x 3 seeds (11, 23, 47) x 3 chronological folds (1, 2, 3) = 54 fits.",
-      "max_e3_feature_ablation_fits": 9,
-      "e3_feature_ablation_structure": "3 controlled feature representations (pilot_v1 8-col, campaign 11-col, e3_price_only 13-col no-volume/no-spread) x 3 chronological folds (seed 11) = 9 fits on the top calibrated E2 architecture.",
-      "max_e4_prospective_fits": 4,
-      "e4_prospective_gate": "Reserved strictly for future 56-day prospective period (>= 7 days post-manifest, keeping sealed holdout 1785024300 closed) ONLY if an E2/E3 candidate clears the preregistered gate against catboost_multiquantile_copula (90% coverage in [0.87, 0.93] at h in {1,4,24}, plus >= 2.0% primary scaled CRPS reduction <= 1.1375 with Holm 168h block-bootstrap p < 0.05 or >= 5.0% unbiased variogram reduction <= 94.28 without marginal CRPS loss).",
-      "sum_planned_plus_reserve": 67
+    "consumed_e2_architecture_slots": 54,
+    "completed_e2_architecture_slots": 54,
+    "failed_e2_architecture_slots": 0,
+    "consumed_e3_feature_ablation_slots": 9,
+    "completed_e3_feature_ablation_slots": 9,
+    "failed_e3_feature_ablation_slots": 0,
+    "consumed_e4_prospective_slots": 0,
+    "total_neural_fit_slots_consumed": 68,
+    "total_neural_fit_slots_completed": 66,
+    "total_neural_fit_slots_failed": 2,
+    "remaining_neural_fit_slots": 4,
+    "campaign_stage_summary": {
+      "status": "e2_and_e3_completed_e4_reserved",
+      "e2_summary": "54/54 completed (0 failures) across rtx5080_e2 (27 fits, 8373.8s) and rtx3070_e2 (27 fits, 6031.5s) at commit 52e18603e631bd4ba79ce1621f1145b076f8f912. 0/6 architectures passed Gate A (-2.0% marginal CRPS <= 1.1375); 5/6 failed overall; recursive_student_t passed Gate B (-6.40% unbiased variogram = 92.90 <= 94.28, CRPS = 1.1507 -0.86%, 90% coverage 89.4/89.6/88.8%, Holm p = 0.0030). Full slot-by-slot provenance in e2_gate_results.json.",
+      "e3_summary": "9/9 completed (0 failures) on recursive_student_t seed 11 across rtx5080_e3 (6 fits, 2009.2s) and rtx3070_e3 (3 fits, 2734.6s) at commit 559cc9e9ed09d9502c73131640eba5a6eb282e34. e3_price_only (13-col, no volume/spread) achieved CRPS 1.1503 and variogram 93.00 (Gate B PASS, statistically indistinguishable from 19-col e2_matched: Holm p = 0.3258 CRPS, p = 0.0790 variogram); campaign (11-col) achieved 1.1580 / 93.33 (Gate B PASS); pilot_v1 (8-col) regressed to 1.1718 (+0.95% CRPS loss, Gate FAIL). Full slot-by-slot provenance in e3_gate_results.json.",
+      "e4_prospective_reserve": {
+        "reserved_slots": 4,
+        "spent_slots": 0,
+        "governance_rule": "Reserved strictly for a future live 56-day prospective period (>= 7 days post-manifest, keeping sealed historical holdout 1785024300 closed)."
+      }
     }
   },
   "cpu_baseline_budget": {
     "approved_cpu_hours": 12.0,
-    "stage": "E1 full chronological 3-fold baseline suite",
+    "consumed_cpu_hours": 7.4,
+    "stage": "E1 full chronological 3-fold baseline suite (completed)",
     "max_worker_threads_desktop": 6,
     "counts_against_neural_72_fit_cap": false
   },
   "governance_assertions": {
     "sealed_holdout_untouched": true,
     "prior_pilot_directories_preserved_immutable": true,
-    "no_automatic_gpu_campaign_launch": false,
+    "unmodified_preregistered_gate_thresholds": true,
+    "no_active_gpu_or_cpu_jobs": true,
     "user_authorized_e2_e4_at_local": "2026-11-01T02:47:11-08:00"
   }
 }
