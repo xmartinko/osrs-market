@@ -1,7 +1,9 @@
 # Phase One `E2–E4` GPU Campaign Live Status (`E2_STATUS.md`)
 
-**Last updated:** `2026-11-01T03:20:00-08:00`  
+**Last updated:** `2026-11-01T04:27:21-08:00`  
 **Branch:** `research/osrs-phase-one-2026-11-01`  
+**Evaluated commit:** `52e18603e631bd4ba79ce1621f1145b076f8f912` (`git_dirty: false`)  
+**Authoritative Git tree:** `C:/Users/xmart/osrs-phase-one` -> synced & SHA-256 verified on WSL (`/home/xmart/osrs-research/code`) and ThinkPad (`/home/martin/osrs-research/code`)  
 **Sealed holdout (`>= 1785024300`):** **UNTOUCHED (`holdout_touched: false`)**
 
 ---
@@ -12,10 +14,10 @@
 |---|---:|---:|---:|---:|---:|
 | Pilot stage (`p01`–`p03` + 2 pre-opt CUDA index errors) | 5 | 5 | 3 | 2 | 0 |
 | `E1` 21-baseline 3-fold CPU campaign | 0 | 0 | — (`21` CPU models) | 0 | 0 |
-| **`E2` 6-architecture × 3-seed × 3-fold GPU campaign** | `<= 54` | **0** *(launching now)* | 0 | 0 | 54 |
-| **`E3` controlled feature ablations (3 ablations × 3 folds)** | `<= 9` | **0** *(queued after E2)* | 0 | 0 | 9 |
+| **`E2` 6-architecture × 3-seed × 3-fold GPU campaign** | `<= 54` | **15** | 15 | 0 | 39 |
+| **`E3` controlled feature ablations (3 ablations × 3 folds)** | `<= 9` | **0** | 0 | 0 | 9 |
 | **`E4` prospective 56-day refits (future live window only)** | `<= 4` | **0** *(reserved; holdout sealed)* | 0 | 0 | 4 |
-| **Total Campaign** | **72** | **5** | **3** | **2** | **67** |
+| **Total Campaign** | **72** | **20** | **18** | **2** | **52** |
 
 ---
 
@@ -29,41 +31,27 @@ Every neural candidate is scored on the **exact identical 3-fold `complete_24h` 
 
 ---
 
-## 3. Current Execution State, Authoritative Tree Topology & Active Queues
+## 3. Live Queue Progress & Provenance
 
-- **Authoritative Git source tree:** `C:/Users/xmart/osrs-phase-one` (all code/protocol/status edits are authored, linted, unit-tested, and committed here).
-- **Synchronized Linux GPU execution checkouts (verified via Git commit + `sha256sum` prior to queue launch):**
-  - Desktop WSL2 (RTX 5080): `/home/xmart/osrs-research/code`
-  - ThinkPad (RTX 3070 Laptop GPU): `/home/martin/osrs-research/code`
-  - VPS archive/relay worktree: `/home/martin/osrs-phase-one-worktree`
-  - Every fit records `code_commit`, `git_dirty` (`false` enforced by `run_node_queue`), `code_tree`, `authoritative_git_tree`, and `source_module_sha256` inside both `status.json` and `metadata.json`.
-- **Current phase:** Verifying `pytest` + `ruff`, syncing committed HEAD across Windows -> VPS/`devstash` -> WSL -> ThinkPad, verifying byte-for-byte `sha256sum` across all trees, running zero-market-data synthetic CUDA smoke checks, and dispatching concurrent GPU queues:
-  - **Queue `rtx5080_e2` (Desktop WSL2 RTX 5080, 27 fits):**
-    - `spline_flow` (`campaign_v3` cumulative affine + Cholesky correlation + 4 RQ-spline coupling blocks + learnable Student-$t$ base): seeds `11, 23, 47` × folds `1, 2, 3` (`9` fits)
-    - `recursive_student_t` (closed-loop 1-step autoregressive Student-$t$ rollout): seeds `11, 23, 47` × folds `1, 2, 3` (`9` fits)
-    - `gaussian_lowrank` (rank-4 + diagonal Gaussian increments): seeds `11, 23, 47` × folds `1, 2, 3` (`9` fits)
-  - **Queue `rtx3070_e2` (ThinkPad RTX 3070 Laptop GPU, 27 fits):**
-    - `direct_marginal_student_t` (shared-encoder independent-horizon cumulative Student-$t$): seeds `11, 23, 47` × folds `1, 2, 3` (`9` fits)
-    - `student_t` (independent-increment Student-$t$): seeds `11, 23, 47` × folds `1, 2, 3` (`9` fits)
-    - `gaussian_diag` (independent-increment Gaussian): seeds `11, 23, 47` × folds `1, 2, 3` (`9` fits)
+- **Desktop WSL2 RTX 5080 (`rtx5080_e2`):** status `running`, fit `6/27` (`e2_spline_flow_f2_s47`), `code_tree=/home/xmart/osrs-research/code`, `code_commit=52e18603e631bd4ba79ce1621f1145b076f8f912`
+- **ThinkPad RTX 3070 (`rtx3070_e2`):** status `running`, fit `11/27` (`e2_student_t_f1_s23`), `code_tree=/home/martin/osrs-research/code`, `code_commit=52e18603e631bd4ba79ce1621f1145b076f8f912`
 
 ---
 
-## 4. `E2` Gate Verdicts So Far
+## 4. `E2` Gate Verdicts
 
-| Candidate Architecture | Seeds × Folds Done | 90% Cov (`h=1 / 4 / 24`) | Primary Macro Scaled CRPS | vs `catboost` (`1.1607`) | Unbiased Variogram | vs `catboost` (`99.24`) | Holm `p` (CRPS / Var) | Gate Verdict |
+| Candidate Architecture | Fits Done | 90% Cov (`h=1 / 4 / 24`) | Primary Macro Scaled CRPS | vs `catboost` (`1.1607`) | Unbiased Variogram | vs `catboost` (`99.24`) | Holm `p` (CRPS / Var) | Gate Verdict |
 |---|:---:|:---:|---:|---:|---:|---:|:---:|:---:|
-| `spline_flow` (`campaign_v3`) | `0 / 9` | pending | pending | pending | pending | pending | pending | `PENDING` |
-| `recursive_student_t` | `0 / 9` | pending | pending | pending | pending | pending | pending | `PENDING` |
-| `direct_marginal_student_t` | `0 / 9` | pending | pending | pending | pending | pending | pending | `PENDING` |
-| `gaussian_lowrank` | `0 / 9` | pending | pending | pending | pending | pending | pending | `PENDING` |
-| `student_t` | `0 / 9` | pending | pending | pending | pending | pending | pending | `PENDING` |
-| `gaussian_diag` | `0 / 9` | pending | pending | pending | pending | pending | pending | `PENDING` |
+| `spline_flow` (`campaign_v3`) | `5 / 9` | pending | pending | pending | pending | pending | pending | `IN PROGRESS` |
+| `recursive_student_t` | `0 / 9` | pending | pending | pending | pending | pending | pending | `IN PROGRESS` |
+| `direct_marginal_student_t` | `9 / 9` | `89.2% / 89.4% / 89.2%` | `1.1508` | `-0.85%` | `136.30` | `+37.33%` | `0.0005 / 0.0005` | **`FAIL`** (CRPS/Var) |
+| `gaussian_lowrank` | `0 / 9` | pending | pending | pending | pending | pending | pending | `IN PROGRESS` |
+| `student_t` | `1 / 9` | pending | pending | pending | pending | pending | pending | `IN PROGRESS` |
+| `gaussian_diag` | `0 / 9` | pending | pending | pending | pending | pending | pending | `IN PROGRESS` |
 
 ---
 
-## 5. Next Milestones
-1. Complete `pytest` + synthetic GPU checks and push frozen `E2–E4` preregistration commit to `devstash`.
-2. Launch `rtx5080_e2` (27 fits) and `rtx3070_e2` (27 fits) concurrently; update this file as architectures complete and gate verdicts land.
-3. Run `E3` controlled feature ablations (`9` fits: `pilot_v1` 8-col, `campaign` 11-col, and `e3_price_only` 13-col no-volume/no-spread across Folds 1–3 on the top calibrated `E2` architecture).
-4. Sync all run summaries/loss panels to VPS `/home/martin/osrs-data/phase-one-20261101/runs/` (outside Git), commit final `e2_e3_campaign_results.{json,md}` and updated `E2_STATUS.md`, and push to `devstash`.
+## Next Steps in Queue
+- Complete remaining `E2` fits across `rtx5080_e2` and `rtx3070_e2`, updating gate verdicts and pushing milestone updates to `devstash`.
+- Dispatch `E3` 9-fit feature-set ablation (`pilot_v1` 8-col, `campaign` 11-col, `e3_price_only` 13-col × Folds 1–3) on RTX 5080 once `E2` finishes.
+- Keep `E4` (`4` slots) unspent in reserve unless/until a future live 56-day prospective window opens after gate clearance; keep sealed holdout `1785024300` closed.
